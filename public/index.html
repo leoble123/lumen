@@ -19,8 +19,13 @@
 
   <div id="titlebar"></div>
 
-  <!-- Top-right buttons -->
+  <!-- Top buttons -->
+  <div id="top-left">
+    <button id="btn-back" class="glass circle-btn" title="Back" aria-label="Back" data-icon="back"></button>
+  </div>
   <div id="top-actions">
+    <button id="open-devices" class="glass circle-btn" title="Devices" aria-label="Devices" data-icon="devices"></button>
+    <button id="open-queue" class="glass circle-btn" title="Queue" aria-label="Queue" data-icon="queue"></button>
     <button id="open-settings" class="glass circle-btn" title="Customize" aria-label="Customize" data-icon="sliders"></button>
   </div>
 
@@ -29,9 +34,12 @@
     <section class="player-col">
       <div class="art-wrap"><img id="art" alt=""><div class="art-shine"></div></div>
       <div class="glass panel player-panel">
-        <div class="meta">
-          <div id="title">Nothing playing</div>
-          <div id="artist"></div>
+        <div class="meta-row">
+          <div class="meta">
+            <div id="title">Nothing playing</div>
+            <div id="artist"></div>
+          </div>
+          <button id="btn-like" class="ctl small" title="Like" aria-label="Like" data-icon="heartLine"></button>
         </div>
         <div class="progress">
           <div id="bar"><div id="bar-fill"></div></div>
@@ -44,6 +52,7 @@
           <button id="btn-next" class="ctl" title="Next" aria-label="Next" data-icon="next"></button>
           <button id="btn-repeat" class="ctl small" title="Repeat" aria-label="Repeat" data-icon="repeat"></button>
         </div>
+        <button id="device-label" class="device-label"><span data-icon="devices"></span><b>Playing on this computer</b></button>
         <div class="volume">
           <span data-icon="volLow"></span>
           <input id="vol" type="range" min="0" max="100" value="70" aria-label="Volume">
@@ -60,6 +69,12 @@
   <main id="view-library" class="view scroll">
     <h1 class="page-title">Library</h1>
     <div id="playlists" class="grid"></div>
+  </main>
+
+  <!-- ============ Detail page (playlist / album / artist) ============ -->
+  <main id="view-detail" class="view scroll">
+    <div id="detail-head"></div>
+    <div id="detail-body"></div>
   </main>
 
   <!-- ============ Search ============ -->
@@ -90,13 +105,38 @@
   </nav>
 
   <!-- Settings sheet -->
-  <aside id="settings" class="glass" data-glass-blur="18">
+  <aside id="settings" class="glass sheet" data-glass-blur="18">
     <div class="sheet-head">
       <h2>Customize</h2>
       <button id="close-settings" class="glass circle-btn small" aria-label="Close" data-icon="close"></button>
     </div>
-    <div id="settings-body"></div>
+    <div id="settings-body" class="sheet-body"></div>
   </aside>
+
+  <!-- Queue sheet -->
+  <aside id="queue" class="glass sheet" data-glass-blur="18">
+    <div class="sheet-head">
+      <h2>Queue</h2>
+      <button id="close-queue" class="glass circle-btn small" aria-label="Close" data-icon="close"></button>
+    </div>
+    <div id="queue-body" class="sheet-body"></div>
+  </aside>
+
+  <!-- Devices sheet -->
+  <aside id="devices" class="glass sheet" data-glass-blur="18">
+    <div class="sheet-head">
+      <h2>Devices</h2>
+      <button id="close-devices" class="glass circle-btn small" aria-label="Close" data-icon="close"></button>
+    </div>
+    <div id="devices-body" class="sheet-body"></div>
+  </aside>
+
+  <!-- Reconnect banner (new permissions) -->
+  <div id="reconnect" class="glass">
+    <div><b>Unlock playlist editing & likes</b><span>Reconnect Spotify once to give Lumen the new permissions.</span></div>
+    <button id="reconnect-btn" class="primary small">Reconnect</button>
+    <button id="reconnect-close" class="ctl small" aria-label="Dismiss" data-icon="close"></button>
+  </div>
 
   <!-- Welcome / connect -->
   <div id="welcome" class="overlay">

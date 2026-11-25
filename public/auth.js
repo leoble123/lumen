@@ -4,7 +4,16 @@ const SCOPES = [
   'streaming', 'user-read-email', 'user-read-private',
   'user-read-playback-state', 'user-modify-playback-state', 'user-read-currently-playing',
   'playlist-read-private', 'playlist-read-collaborative', 'user-library-read',
+  'playlist-modify-public', 'playlist-modify-private', 'user-library-modify', 'user-follow-read', 'user-follow-modify',
 ].join(' ');
+
+// Permissions added in newer versions of Lumen; older logins need to reconnect once to get them.
+export function missingScopes() {
+  const t = store.get('tokens');
+  if (!t) return [];
+  const granted = new Set((t.scope || '').split(' '));
+  return SCOPES.split(' ').filter(s => !granted.has(s));
+}
 
 const store = {
   get: k => { try { return JSON.parse(localStorage.getItem('lumen.' + k)); } catch { return null; } },
@@ -40,6 +49,7 @@ async function tokenRequest(body) {
     access: data.access_token,
     refresh: data.refresh_token || prev.refresh,
     expiresAt: Date.now() + data.expires_in * 1000,
+    scope: data.scope || prev.scope || '',
   };
   store.set('tokens', tokens);
   return tokens;

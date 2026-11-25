@@ -5,10 +5,14 @@ import { getToken } from './auth.js';
 
 const REPEAT = ['off', 'context', 'track'];
 
+const idFromUri = uri => uri ? uri.split(':').pop() : null;
+
 function fromApiItem(item) {
   if (!item) return null;
   return {
     id: item.id, uri: item.uri, name: item.name,
+    artistList: (item.artists || []).map(a => ({ id: a.id || idFromUri(a.uri), name: a.name })),
+    albumId: item.album?.id || idFromUri(item.album?.uri),
     artist: (item.artists || item.show && [item.show] || []).map(a => a.name).join(', '),
     album: item.album?.name || '',
     image: (item.album?.images || item.images || [])[0]?.url || '',
@@ -40,8 +44,9 @@ export function sdkSource({ onState, onError, volume }) {
         const t = s.track_window.current_track;
         last = {
           track: t && { id: t.id, uri: t.uri, name: t.name, artist: t.artists.map(a => a.name).join(', '),
+            artistList: t.artists.map(a => ({ id: idFromUri(a.uri), name: a.name })), albumId: idFromUri(t.album.uri),
             album: t.album.name, image: t.album.images.sort((a, b) => b.width - a.width)[0]?.url, durationMs: s.duration },
-          positionMs: s.position, paused: s.paused, at: performance.now(),
+          positionMs: s.position, paused: s.paused, at: performance.now(), deviceName: 'this computer',
           shuffle: s.shuffle, repeat: REPEAT[s.repeat_mode] || 'off',
         };
         onState(last);
@@ -78,16 +83,18 @@ export function remoteSource({ onState, onError }) {
       const s = await api('/me/player', { query: { additional_types: 'track,episode' } });
       onState(s ? {
         track: fromApiItem(s.item), positionMs: s.progress_ms || 0, paused: !s.is_playing,
-        at: performance.now(), shuffle: s.shuffle_state, repeat: s.repeat_state, volume: s.device?.volume_percent,
+        at: performance.now(), shuffle: s.shuffle_state, repeat: s.repeat_state, volume: s.device?.volume_percent, deviceName: s.device?.name,
       } : { track: null, positionMs: 0, paused: true, at: performance.now() });
     } catch (e) { onError('poll', e.message); }
     timer = setTimeout(poll, document.hidden ? 5000 : 1500);
   }
   const refresh = () => { clearTimeout(timer); setTimeout(poll, 300); };
   const call = (p, opts) => api(p, opts).then(refresh).catch(e => {
-    onError('control', e.reason === 'NO_ACTIVE_DEVICE' || e.status === 404
+    const err = new Error(e.reason === 'NO_ACTIVE_DEVICE' || (e.status === 404 && p.startsWith('/me/player'))
       ? 'Open Spotify on any device and play something first.'
-      : e.status === 403 ? 'Spotify Premium is required for playback controls.' : e.message);
+      : e.status === 403 && !/scope/i.test(e.message) ? 'Spotify Premium is required for playback controls.' : e.message);
+    err.status = e.status;
+    throw err;
   });
   let paused = true;
   const wrapState = onState;

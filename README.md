@@ -37,6 +37,23 @@ node tools/release.js 0.4.1 "What's new in this version"
 git commit -am "Lumen 0.4.1" && git push
 ```
 
+## Getting around
+- **Playlists, albums, artists:** tap any cover or name to open its page. The round ▶ on a cover plays it right away.
+  Artist and album names are tappable everywhere, including in the player and mini player. The cover art opens the album.
+- **Song options:** hover a song and press **•••** (or right-click) to add it to the queue, add it to a playlist, like it,
+  or go to its album or artist.
+- **Queue** (top-right list icon): see what's playing next and remove songs. Spotify doesn't let apps delete
+  queue items, so Lumen skips removed songs automatically while it's open.
+- **Devices** (top-right, or "Playing on …" in the player): move playback to your phone, a speaker or TV, change
+  a device's volume, or bring the music back to Lumen. To pick your computer's speakers or headphones, use your
+  computer's sound settings.
+- **Your playlists:** create one with **New playlist** in Library. On a playlist you own, ✏️ renames or deletes it,
+  drag songs to reorder them, and use ••• → Remove to take songs out.
+- **Liked songs:** the ♡ in the player, or ••• → Save to Liked Songs.
+
+Spotify limits what personal apps can see: songs inside playlists you **don't own** can't be listed
+(you can still play them), and there's no "top songs" list for artists, so Lumen shows popular songs from search.
+
 ## Playback (⚙ Customize → Play audio in)
 - **Lumen:** Lumen plays the music itself.
 - **Spotify app:** the normal Spotify app (or your phone) plays the music, and Lumen shows lyrics + controls.
