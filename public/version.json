@@ -1,0 +1,23 @@
+{
+  "version": "0.4.0",
+  "notes": "Over-the-air updates, liquid glass redesign, fixed search and settings.",
+  "released": "2026-11-25T19:34:15.227Z",
+  "files": {
+    "api.js": "2ee36e8235748cc694c3eb14f08f4de84a334638b0f45b2b55dd5e660829528d",
+    "app.js": "f572a9c20f72c266998db48a6df84d8bf4281a5957d73c6db45e9c1d935111ea",
+    "auth.js": "4402110b98df5940876f130452810d3c2d19205a59638802d291ee899f677f19",
+    "glass.js": "10ab6074c1b10fedb5fdeb3ba7a143801e1b868df7ed4bb9406951f7f4d0a071",
+    "icons/apple-touch-icon.png": "c29dfedfee5e72b8299f8dc8fe8a26f54427bc1b3787fabf3cc8011589eb8715",
+    "icons/icon-192.png": "8990b028683a38fa4a0616b43e8d8f80da9e0aeb6cf55b380e76779c61cb7d03",
+    "icons/icon-512.png": "74b9f3cbe698210309776dc5a34f43f5a739559efff7c5766dec02384869b6cc",
+    "icons/icon.svg": "c26f39f9db98fe2f0fb96a83f2932740d4cea3e009de0430adc9e6f7525ae8c9",
+    "icons/maskable-512.png": "b56c08c5bac7336056fb9fb54a7df0053abb3da5951e6970d31158a4013a647e",
+    "icons.js": "8c1e2b80cb5a06c8a9b279c978645ed24f7dd46286c0de8b550084a74c38287f",
+    "index.html": "fa5da068bbd46d4844b646aecc513f67cc145b7e141bd8b24a63f9f02d91ca9a",
+    "lyrics.js": "7e027051db8a43dcfabbd55009acc10c4840a33c6ceeca825b8549e9d410b00b",
+    "manifest.webmanifest": "2a3791da45af36a44afcd1930c54d066c8f2f885aff8ee9852e0ccd26ee785bc",
+    "playback.js": "e830677f975cdcb24428d31b683c96742a86c1e283af1e686d75316b6066399c",
+    "styles.css": "cd8a45dbbaf10b2dacb9f8fa49df3791d7c839ad03e526719ecc3354d2e20f26",
+    "update-core.js": "7239e717d233d32a59e6fa9325e2f653f9216aa1463e730e9e5fe2a72ab07129"
+  }
+}

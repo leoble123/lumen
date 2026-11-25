@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en" data-glass="liquid">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000">
+  <title>Lumen</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Animated background -->
+  <div id="bg">
+    <div id="bg-art"></div>
+    <div class="blob" id="blob1"></div><div class="blob" id="blob2"></div><div class="blob" id="blob3"></div><div class="blob" id="blob4"></div>
+    <div class="bg-dim"></div>
+  </div>
+
+  <div id="titlebar"></div>
+
+  <!-- Top-right buttons -->
+  <div id="top-actions">
+    <button id="open-settings" class="glass circle-btn" title="Customize" aria-label="Customize" data-icon="sliders"></button>
+  </div>
+
+  <!-- ============ Now Playing ============ -->
+  <main id="view-nowplaying" class="view active">
+    <section class="player-col">
+      <div class="art-wrap"><img id="art" alt=""><div class="art-shine"></div></div>
+      <div class="glass panel player-panel">
+        <div class="meta">
+          <div id="title">Nothing playing</div>
+          <div id="artist"></div>
+        </div>
+        <div class="progress">
+          <div id="bar"><div id="bar-fill"></div></div>
+          <div class="times"><span id="t-cur">0:00</span><span id="t-left">-0:00</span></div>
+        </div>
+        <div class="controls">
+          <button id="btn-shuffle" class="ctl small" title="Shuffle" aria-label="Shuffle" data-icon="shuffle"></button>
+          <button id="btn-prev" class="ctl" title="Previous" aria-label="Previous" data-icon="prev"></button>
+          <button id="btn-play" class="ctl big" title="Play" aria-label="Play" data-icon="play"></button>
+          <button id="btn-next" class="ctl" title="Next" aria-label="Next" data-icon="next"></button>
+          <button id="btn-repeat" class="ctl small" title="Repeat" aria-label="Repeat" data-icon="repeat"></button>
+        </div>
+        <div class="volume">
+          <span data-icon="volLow"></span>
+          <input id="vol" type="range" min="0" max="100" value="70" aria-label="Volume">
+          <span data-icon="volHigh"></span>
+        </div>
+      </div>
+    </section>
+    <section class="lyrics-col">
+      <div id="lyrics"><div id="lyrics-inner"></div></div>
+    </section>
+  </main>
+
+  <!-- ============ Library ============ -->
+  <main id="view-library" class="view scroll">
+    <h1 class="page-title">Library</h1>
+    <div id="playlists" class="grid"></div>
+  </main>
+
+  <!-- ============ Search ============ -->
+  <main id="view-search" class="view scroll">
+    <h1 class="page-title">Search</h1>
+    <div class="glass search-field" data-glass-strength="0.7">
+      <span data-icon="search"></span>
+      <input id="search-input" type="search" placeholder="Songs, artists, albums, playlists" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="search-results"></div>
+  </main>
+
+  <!-- Mini player (shown on Library/Search) -->
+  <div id="mini" class="glass">
+    <img id="mini-art" alt="">
+    <div class="mini-meta"><div id="mini-title"></div><div id="mini-artist"></div></div>
+    <button id="mini-play" class="ctl" aria-label="Play/Pause" data-icon="play"></button>
+    <button id="mini-next" class="ctl" aria-label="Next" data-icon="next"></button>
+    <div id="mini-bar"></div>
+  </div>
+
+  <!-- Floating tab bar -->
+  <nav id="tabbar" class="glass">
+    <div id="tab-thumb"></div>
+    <button data-view="nowplaying" class="active"><span data-icon="note"></span><b>Now Playing</b></button>
+    <button data-view="library"><span data-icon="library"></span><b>Library</b></button>
+    <button data-view="search"><span data-icon="search"></span><b>Search</b></button>
+  </nav>
+
+  <!-- Settings sheet -->
+  <aside id="settings" class="glass" data-glass-blur="18">
+    <div class="sheet-head">
+      <h2>Customize</h2>
+      <button id="close-settings" class="glass circle-btn small" aria-label="Close" data-icon="close"></button>
+    </div>
+    <div id="settings-body"></div>
+  </aside>
+
+  <!-- Welcome / connect -->
+  <div id="welcome" class="overlay">
+    <div class="glass card" data-glass-blur="24">
+      <div class="app-icon"><img src="icons/icon-192.png" alt=""></div>
+      <h1>Welcome to Lumen</h1>
+      <p class="sub">Connect your Spotify account once — it takes about 2 minutes.</p>
+      <div class="step"><span class="num">1</span><div>Open the Spotify Developer Dashboard and click <b>Create app</b>.<br>
+        <a class="pill-btn" href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Open Spotify Dashboard ↗</a></div></div>
+      <div class="step"><span class="num">2</span><div>Paste this as the <b>Redirect URI</b>, and tick <b>Web API</b> and <b>Web Playback SDK</b>.
+        <button class="copy-box" id="copy-redirect"><code>http://127.0.0.1:8888/callback</code><span data-icon="copy"></span></button></div></div>
+      <div class="step"><span class="num">3</span><div>Save, then copy the app's <b>Client ID</b> into the box below.</div></div>
+      <input id="client-id" placeholder="Client ID" spellcheck="false" autocomplete="off">
+      <button id="btn-login" class="primary">Connect Spotify</button>
+      <button id="btn-demo" class="text-btn">Try the demo first</button>
+      <p id="login-error" class="error"></p>
+    </div>
+  </div>
+
+  <!-- Install banner -->
+  <div id="install" class="glass">
+    <img src="icons/icon-192.png" alt="">
+    <div><b>Install Lumen</b><span>Open it from your Start menu or Dock — no launcher needed.</span></div>
+    <button id="install-btn" class="primary small">Install</button>
+    <button id="install-close" class="ctl small" aria-label="Dismiss" data-icon="close"></button>
+  </div>
+
+  <div id="toast" class="glass"></div>
+  <!-- Update banner -->
+  <div id="update" class="glass">
+    <img src="icons/icon-192.png" alt="">
+    <div><b id="update-title">Update ready</b><span id="update-notes"></span></div>
+    <button id="update-restart" class="primary small">Restart</button>
+    <button id="update-later" class="ctl small" aria-label="Later" data-icon="close"></button>
+  </div>
+
+  <script src="update-core.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
