@@ -141,7 +141,7 @@ export function demoSource({ onState }) {
     <path d="M0 300 Q100 240 200 290 T400 270 V400 H0Z" fill="#000" opacity=".35"/>
     <text x="28" y="370" font-family="Helvetica, Arial" font-weight="800" font-size="34" fill="#fff">NEON RIVERS</text></svg>`);
   const track = { id: 'demo', uri: 'demo', name: 'Neon Rivers', artist: 'Lumen Demo', album: 'Night Signals', image: art, durationMs: DUR,
-    demoColors: ['#7a2cff', '#ff3d77', '#0d1b6e'] };
+    demoColors: ['#7a2cff', '#ff3d77', '#0d1b6e', '#3a1060'] };
   const cur = () => paused ? pos : (pos + performance.now() - at) % DUR;
   const emit = () => { pos = cur(); at = performance.now(); onState({ track, positionMs: pos, paused, at, shuffle: false, repeat: 'context' }); };
   return {

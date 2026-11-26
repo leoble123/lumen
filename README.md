@@ -37,6 +37,26 @@ node tools/release.js 0.4.1 "What's new in this version"
 git commit -am "Lumen 0.4.1" && git push
 ```
 
+## Home
+Lumen opens on **Home** (change it in Customize → General): your quick picks, the albums and playlists you were just
+playing, recently played songs, your top artists, what's on repeat, your saved albums and your playlists.
+
+## Make it yours (⚙ Customize)
+- **Themes:** one-tap presets (Midnight, Sunset, Vapor, Mono, Crystal, Lava, Spotlight). Save your own look, share it
+  as a code, or import a friend's.
+- **Backgrounds:** GPU-rendered Mesh gradient, Aurora, Lava lamp, Waves, Starfield, plus Fluid, Album art and Solid,
+  with motion, intensity and film-grain sliders. They all take their colors from the album art.
+- **Lyrics styles:** Word by word (each word lights up and lifts as it's sung), Line sweep, Minimal and One line,
+  with size, glow, letter spacing and line spacing controls.
+
+## Command palette — Ctrl+K (⌘K on Mac)
+Type to do almost anything: change a setting ("aurora"), apply a theme ("theme sunset"), jump to a page, control
+playback, or search Spotify and play or open the result.
+
+## Media keys
+Your keyboard's play/pause/next/previous keys control Lumen, and Lumen shows up in the Windows media pop-up and the
+Mac's Now Playing menu with the album art.
+
 ## Getting around
 - **Playlists, albums, artists:** tap any cover or name to open its page. The round ▶ on a cover plays it right away.
   Artist and album names are tappable everywhere, including in the player and mini player. The cover art opens the album.
@@ -60,7 +80,7 @@ Spotify limits what personal apps can see: songs inside playlists you **don't ow
   Lumen switches to this automatically if in-app playback ever fails.
 
 ## Shortcuts
-Space = play/pause · ← / → = seek 5s · Shift+← / → = previous / next · Ctrl/Cmd+F = search ·
+Ctrl/Cmd+K = command palette · Space = play/pause · ← / → = seek 5s · Shift+← / → = previous / next · Ctrl/Cmd+F = search ·
 Ctrl/Cmd+, = customize · click a lyric line to jump to it · scroll the lyrics to look ahead
 
 ## Notes
@@ -68,3 +88,8 @@ Ctrl/Cmd+, = customize · click a lyric line to jump to it · scroll the lyrics 
 - Lyrics come from lrclib.net, a free community database. A few songs may be missing.
 - Since February 2026 Spotify limits developer apps to 10 search results per request, so Lumen
   loads more with "Show more songs".
+
+## Credits
+Ideas borrowed from great open-source projects (no code copied): Apple Music-like Lyrics (AMLL) and Beautiful Lyrics
+for word-by-word lyrics, whatamesh for mesh gradients, and cmdk / ninja-keys for the command palette.
+Lyrics: [LRCLIB](https://lrclib.net).

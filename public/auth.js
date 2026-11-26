@@ -5,6 +5,7 @@ const SCOPES = [
   'user-read-playback-state', 'user-modify-playback-state', 'user-read-currently-playing',
   'playlist-read-private', 'playlist-read-collaborative', 'user-library-read',
   'playlist-modify-public', 'playlist-modify-private', 'user-library-modify', 'user-follow-read', 'user-follow-modify',
+  'user-top-read', 'user-read-recently-played',
 ].join(' ');
 
 // Permissions added in newer versions of Lumen; older logins need to reconnect once to get them.

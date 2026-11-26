@@ -1,11 +1,16 @@
 import { login, handleCallback, isLoggedIn, logout, store } from './auth.js';
 import { api } from './api.js';
-import { getLyrics, parseLRC, withGaps } from './lyrics.js';
+import { getLyrics, parseLRC, withGaps, timeWords } from './lyrics.js';
 import { sdkSource, remoteSource, demoSource } from './playback.js';
 import { icons, hydrateIcons } from './icons.js';
 import * as glass from './glass.js';
 import * as pages from './pages.js';
 import * as devices from './devices.js';
+import * as bgGl from './bg-gl.js';
+import * as home from './home.js';
+import * as palette from './palette.js';
+import * as media from './media.js';
+import * as themes from './themes.js';
 import { missingScopes } from './auth.js';
 window.__lumenGlass = glass;
 
@@ -17,7 +22,11 @@ const setIcon = (el, name) => { if (el.dataset.icon !== name) { el.dataset.icon 
 /* =====================================================================
    SETTINGS — one schema drives the UI, validation, defaults and apply()
    ===================================================================== */
+const GL_STYLES = ['mesh', 'aurora', 'lava', 'waves', 'stars'];
 const SCHEMA = [
+  { group: 'General', items: [
+    { key: 'startView', type: 'seg', label: 'Open Lumen on', def: 'home', options: [['home', 'Home'], ['nowplaying', 'Now Playing']] },
+  ]},
   { group: 'Playback', items: [
     { key: 'playbackMode', type: 'seg', label: 'Play audio in', def: 'app', options: [['app', 'Lumen'], ['remote', 'Spotify app']],
       hint: '“Spotify app” lets the normal Spotify app (or your phone) play the music while Lumen shows lyrics & controls.' },
@@ -27,18 +36,24 @@ const SCHEMA = [
     { key: 'refraction', type: 'range', label: 'Refraction', def: 60, min: 0, max: 100, step: 1, unit: '%', showIf: s => s.glass === 'liquid' },
   ]},
   { group: 'Background', items: [
-    { key: 'bgStyle', type: 'seg', label: 'Style', def: 'fluid', options: [['fluid', 'Fluid'], ['album', 'Album art'], ['solid', 'Solid']] },
-    { key: 'bgMotion', type: 'range', label: 'Motion', def: 1, min: 0, max: 3, step: 0.1, unit: '×', showIf: s => s.bgStyle === 'fluid' },
-    { key: 'bgBlur', type: 'range', label: 'Softness', def: 90, min: 30, max: 160, step: 1, unit: 'px', showIf: s => s.bgStyle !== 'solid' },
+    { key: 'bgStyle', type: 'chips', label: 'Style', def: 'mesh', options: [['mesh', 'Mesh'], ['fluid', 'Fluid'], ['aurora', 'Aurora'], ['lava', 'Lava lamp'], ['waves', 'Waves'], ['stars', 'Starfield'], ['album', 'Album art'], ['solid', 'Solid']] },
+    { key: 'bgMotion', type: 'range', label: 'Motion', def: 1, min: 0, max: 3, step: 0.1, unit: '×', showIf: s => s.bgStyle === 'fluid' || GL_STYLES.includes(s.bgStyle) },
+    { key: 'bgIntensity', type: 'range', label: 'Intensity', def: 50, min: 0, max: 100, step: 1, unit: '%', showIf: s => GL_STYLES.includes(s.bgStyle) },
+    { key: 'bgBlur', type: 'range', label: 'Softness', def: 90, min: 30, max: 160, step: 1, unit: 'px', showIf: s => s.bgStyle === 'fluid' || s.bgStyle === 'album' },
+    { key: 'grain', type: 'range', label: 'Film grain', def: 12, min: 0, max: 100, step: 1, unit: '%' },
     { key: 'accentMode', type: 'seg', label: 'Colors', def: 'auto', options: [['auto', 'From album'], ['custom', 'Custom']] },
     { key: 'accent', type: 'color', label: 'Custom color', def: '#7a5cff', showIf: s => s.accentMode === 'custom' },
   ]},
   { group: 'Lyrics', items: [
+    { key: 'lyricStyle', type: 'chips', label: 'Style', def: 'apple', options: [['apple', 'Word by word'], ['karaoke', 'Line sweep'], ['minimal', 'Minimal'], ['single', 'One line']] },
     { key: 'lyricAlign', type: 'seg', label: 'Alignment', def: 'left', options: [['left', 'Left'], ['center', 'Center']] },
     { key: 'lyricSize', type: 'range', label: 'Size', def: 40, min: 24, max: 68, step: 1, unit: 'px' },
+    { key: 'lyricGlow', type: 'range', label: 'Glow', def: 40, min: 0, max: 100, step: 1, unit: '%' },
+    { key: 'letterSpacing', type: 'range', label: 'Letter spacing', def: -2.5, min: -6, max: 10, step: 0.5, unit: '' },
+    { key: 'lineSpacing', type: 'range', label: 'Line spacing', def: 1, min: 0.5, max: 2.5, step: 0.1, unit: '×' },
     { key: 'lyricSpeed', type: 'range', label: 'Scroll speed', def: 1, min: 0.5, max: 2, step: 0.1, unit: '×' },
     { key: 'font', type: 'select', label: 'Font', def: 'system', options: [['system', 'System'], ['rounded', 'Rounded'], ['serif', 'Serif'], ['mono', 'Mono']] },
-    { key: 'blurInactive', type: 'switch', label: 'Blur other lines', def: true },
+    { key: 'blurInactive', type: 'switch', label: 'Blur other lines', def: true, showIf: s => s.lyricStyle === 'apple' || s.lyricStyle === 'karaoke' },
     { key: 'showGaps', type: 'switch', label: 'Dots during instrumentals', def: true },
   ]},
   { group: 'Updates', items: [
@@ -56,7 +71,7 @@ const FONTS = {
 
 function validate(item, v) {
   switch (item.type) {
-    case 'seg': case 'select': return item.options.some(o => o[0] === v) ? v : item.def;
+    case 'seg': case 'select': case 'chips': return item.options.some(o => o[0] === v) ? v : item.def;
     case 'range': { const n = Number(v); return Number.isFinite(n) ? Math.min(item.max, Math.max(item.min, n)) : item.def; }
     case 'switch': return typeof v === 'boolean' ? v : item.def;
     case 'color': return /^#[0-9a-f]{6}$/i.test(v) ? v : item.def;
@@ -80,8 +95,15 @@ function setSetting(key, value) {
   applySettings();
   syncSettingsUI();
   // side effects that need more than CSS
-  if (key === 'showGaps' && lyricsTrack) reloadLyrics();
+  if ((key === 'showGaps' || key === 'lyricStyle') && lyricsTrack) reloadLyrics();
   if (key === 'playbackMode' && old !== v && source && source.kind !== 'demo') startSource(v);
+}
+
+function applyAll(values) {
+  for (const item of ITEMS) if (item.key in values) settings[item.key] = validate(item, values[item.key]);
+  store.set('settings2', settings);
+  applySettings(); syncSettingsUI();
+  if (lyricsTrack) reloadLyrics();
 }
 
 function resetSettings() {
@@ -99,7 +121,11 @@ function applySettings() {
   r.setProperty('--lyric-speed', settings.lyricSpeed);
   r.setProperty('--bg-blur', settings.bgBlur + 'px');
   r.setProperty('--font', FONTS[settings.font]);
+  r.setProperty('--lyric-glow', settings.lyricGlow / 100);
+  r.setProperty('--lyric-ls', settings.letterSpacing);
+  r.setProperty('--grain', settings.grain / 100);
   document.body.classList.toggle('align-center', settings.lyricAlign === 'center');
+  document.body.className = document.body.className.replace(/\blyric-\w+/g, '').trim() + ` lyric-${settings.lyricStyle}`;
   glass.configure(settings.glass, settings.refraction / 100);
   applyColors();
   applyBackground();
@@ -110,7 +136,7 @@ function applySettings() {
 const controls = new Map(); // key -> { row, update() }
 function buildSettingsUI() {
   const body = $('#settings-body');
-  body.innerHTML = '';
+  body.innerHTML = '<div class="group-title">Themes</div><div class="group theme-group" id="themes-box"></div>';
   for (const g of SCHEMA) {
     body.insertAdjacentHTML('beforeend', `<div class="group-title">${g.group}</div>`);
     const group = document.createElement('div'); group.className = 'group';
@@ -136,9 +162,14 @@ function buildSettingsUI() {
 function buildControl(item) {
   const row = document.createElement('div');
   row.className = 'set-row' + (item.type === 'switch' || item.type === 'color' || item.type === 'select' ? ' inline' : '');
-  const fmt = v => item.unit === '×' ? `${Number(v).toFixed(1)}×` : `${v}${item.unit}`;
+  const fmt = v => item.unit === '×' ? `${Number(v).toFixed(1)}×` : item.unit === '' ? (v > 0 ? `+${v}` : `${v}`) : `${v}${item.unit}`;
   let update;
-  if (item.type === 'seg') {
+  if (item.type === 'chips') {
+    row.innerHTML = `<div class="set-label">${item.label}</div><div class="chips">${item.options.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div>`;
+    const box = row.querySelector('.chips');
+    box.onclick = e => { const b = e.target.closest('button'); if (b) setSetting(item.key, b.dataset.v); };
+    update = () => box.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === settings[item.key]));
+  } else if (item.type === 'seg') {
     row.innerHTML = `<div class="set-label">${item.label}</div><div class="seg"><div class="seg-thumb"></div>${item.options.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div>${item.hint ? `<div class="set-hint">${item.hint}</div>` : ''}`;
     const seg = row.querySelector('.seg'), thumb = row.querySelector('.seg-thumb');
     seg.onclick = e => { const b = e.target.closest('button'); if (b) setSetting(item.key, b.dataset.v); };
@@ -176,6 +207,7 @@ function buildControl(item) {
 }
 
 function syncSettingsUI() {
+  if ($('#themes-box') && $('#settings').classList.contains('open')) themes.renderInto($('#themes-box'));
   controls.forEach(({ row, update, item }) => {
     row.classList.toggle('collapsed', !!item.showIf && !item.showIf(settings));
     update();
@@ -248,10 +280,15 @@ function applyColors() {
   r.setProperty('--accent-text', lum(fromHex(accent)) > 0.62 ? '#000' : '#fff');
   ['--c1', '--c2', '--c3', '--c4'].forEach((v, i) => r.setProperty(v, bg[i]));
   r.setProperty('--solid', toHex(mix(fromHex(bg[0]), [0, 0, 0], .35)));
+  bgGl.setColors(bg);
 }
 
 function applyBackground() {
-  $('#bg').dataset.style = settings.bgStyle;
+  let style = settings.bgStyle;
+  if (GL_STYLES.includes(style)) {
+    if (!bgGl.set(style, { motion: settings.bgMotion, intensity: settings.bgIntensity })) style = 'fluid';   // no WebGL: fall back
+  } else bgGl.set(null);
+  $('#bg').dataset.style = GL_STYLES.includes(style) ? 'gl' : style;
   $('#bg-art').style.backgroundImage = currentArt ? `url("${currentArt}")` : 'none';
 }
 
@@ -293,6 +330,7 @@ function onState(s) {
   setIcon($('#btn-repeat'), s.repeat === 'track' ? 'repeatOne' : 'repeat');
   if (s.volume != null && document.activeElement !== $('#vol')) { $('#vol').value = s.volume; setFill($('#vol')); }
   updateMini();
+  media.update();
   const dev = s.deviceName && s.deviceName !== 'this computer' ? s.deviceName : 'this computer';
   $('#device-label b').textContent = `Playing on ${dev}`;
   $('#device-label').classList.toggle('remote', dev !== 'this computer');
@@ -303,6 +341,7 @@ function onState(s) {
     (t.albumId && t.album ? ` <span class="sep">—</span> <span class="link" data-album="${esc(t.albumId)}">${esc(t.album)}</span>` : '');
   else $('#artist').textContent = t ? t.artist : (source?.kind === 'remote' ? 'Play something in Spotify on any device' : 'Pick something from Library or Search');
   pages.onTrackChange(t);
+  media.update();
   setArt(t);
   loadLyrics(t);
 }
@@ -363,12 +402,23 @@ function renderLyrics() {
   if (res.type === 'instrumental') return lyricsMessage('♪ Instrumental');
   synced = res.type === 'synced';
   lines = synced ? withGaps(res.lines.map(l => ({ ...l })), t.durationMs, settings.showGaps) : res.lines.filter(l => l.text);
+  const byWord = synced && settings.lyricStyle === 'apple';
   inner.innerHTML = '';
   lineEls = lines.map(l => {
     const el = document.createElement('div');
     el.className = 'line' + (l.gap ? ' gap' : '') + (synced ? '' : ' plain');
     if (l.gap) el.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
-    else { const s = document.createElement('span'); s.className = 'fill'; s.textContent = l.text; el.appendChild(s); }
+    else if (byWord) {
+      // one span per word so each can light up and lift on its own
+      l.timed = timeWords(l);
+      const wrap = document.createElement('span'); wrap.className = 'words';
+      l.timed.forEach((w, i) => {
+        if (i) wrap.appendChild(document.createTextNode(' '));
+        const span = document.createElement('span'); span.className = 'w'; span.textContent = w.text; wrap.appendChild(span);
+      });
+      el.appendChild(wrap);
+      l.wordEls = [...wrap.children];
+    } else { const s = document.createElement('span'); s.className = 'fill'; s.textContent = l.text; el.appendChild(s); }
     if (synced) el.onclick = () => seekTo(l.time + 10);
     inner.appendChild(el);
     return el;
@@ -379,7 +429,7 @@ function renderLyrics() {
 
 function layoutLyrics() {
   if (!lineEls.length) return;
-  const gapPx = settings.lyricSize * 0.5;
+  const gapPx = settings.lyricSize * 0.5 * settings.lineSpacing;
   let y = 0;
   tops = lineEls.map(el => { const top = y; y += el.offsetHeight + gapPx; return top; });
   lineEls.forEach(el => { el.style.transition = 'none'; });
@@ -390,24 +440,39 @@ function layoutLyrics() {
 
 function positionLines(instant = false) {
   if (!lineEls.length) return;
-  const anchor = box.clientHeight * (synced ? 0.3 : 0.18);
+  const style = settings.lyricStyle;
   const a = Math.max(0, activeIdx);
+  if (synced && style === 'single') {
+    // one big line at a time, rising into place
+    const mid = box.clientHeight * 0.42;
+    lineEls.forEach((el, i) => {
+      const off = i < activeIdx ? -60 : i > activeIdx ? 60 : 0;
+      el.style.transitionDelay = '0ms';
+      el.style.transform = `translate3d(0, ${(mid - el.offsetHeight / 2 + off).toFixed(1)}px, 0) scale(${i === activeIdx ? 1 : 0.92})`;
+      el.style.filter = i === activeIdx ? 'none' : 'blur(6px)';
+      el.classList.toggle('active', i === activeIdx);
+      el.classList.toggle('past', i < activeIdx);
+    });
+    return;
+  }
+  const anchor = box.clientHeight * (synced ? 0.3 : 0.18);
   const base = synced ? anchor - tops[a] : anchor;
+  const minimal = style === 'minimal';
   lineEls.forEach((el, i) => {
     const dist = synced ? Math.abs(i - activeIdx) : 0;
     const isActive = synced && i === activeIdx;
     // Apple-style "wave": lines below the active one follow a beat later
-    const delay = instant || manualOffset ? 0 : Math.min(Math.max(i - a + 1, 0), 9) * 50 / settings.lyricSpeed;
+    const delay = instant || manualOffset || minimal ? 0 : Math.min(Math.max(i - a + 1, 0), 9) * 50 / settings.lyricSpeed;
     el.style.transitionDelay = `${delay}ms`;
-    el.style.transform = `translate3d(0, ${(base + tops[i] + manualOffset).toFixed(1)}px, 0) scale(${isActive || !synced ? 1 : 0.95})`;
-    el.style.filter = settings.blurInactive && synced && !isActive && !manualOffset ? `blur(${(Math.min(dist, 5) * 0.75).toFixed(2)}px)` : 'none';
+    el.style.transform = `translate3d(0, ${(base + tops[i] + manualOffset).toFixed(1)}px, 0) scale(${isActive || !synced || minimal ? 1 : 0.95})`;
+    el.style.filter = settings.blurInactive && !minimal && synced && !isActive && !manualOffset ? `blur(${(Math.min(dist, 5) * 0.75).toFixed(2)}px)` : 'none';
     el.classList.toggle('active', isActive);
     el.classList.toggle('past', synced && i < activeIdx);
   });
 }
 
 box.addEventListener('wheel', e => {
-  if (!lineEls.length) return;
+  if (!lineEls.length || (synced && settings.lyricStyle === 'single')) return;
   e.preventDefault();
   manualOffset -= e.deltaY;
   manualOffset = Math.max(-(tops.at(-1) || 0), Math.min(box.clientHeight * 0.5, manualOffset));
@@ -417,13 +482,29 @@ box.addEventListener('wheel', e => {
 }, { passive: false });
 new ResizeObserver(() => layoutLyrics()).observe(box);
 
+let lastWordLine = null;
 function tickLyrics(pos) {
   if (!synced || !lines.length) return;
   let idx = -1;
   for (let i = 0; i < lines.length; i++) { if (lines[i].time <= pos + 150) idx = i; else break; }
-  if (idx !== activeIdx) { activeIdx = idx; positionLines(); }
+  if (idx !== activeIdx) {
+    // finish the words of the line we're leaving
+    if (lastWordLine?.wordEls) lastWordLine.wordEls.forEach(w => { w.style.setProperty('--wp', '115%'); w.classList.add('on'); });
+    activeIdx = idx; positionLines();
+  }
   const l = lines[idx], el = lineEls[idx];
-  if (l && el && !l.gap) {
+  if (!l || !el || l.gap) return;
+  if (l.wordEls) {
+    lastWordLine = l;
+    const t = pos + 60;
+    l.timed.forEach((w, i) => {
+      const p = Math.max(0, Math.min(1, (t - w.t) / w.d));
+      const we = l.wordEls[i];
+      we.style.setProperty('--wp', `${(p * 125 - 15).toFixed(1)}%`);
+      we.classList.toggle('on', p > 0);
+    });
+  } else if (el.firstChild?.style) {
+    if (settings.lyricStyle === 'minimal') { el.firstChild.style.setProperty('--p', '110%'); return; }
     const len = Math.min(l.end - l.time, Math.max(1400, l.text.length * 85));
     const p = Math.max(0, Math.min(1, (pos - l.time) / len));
     el.firstChild.style.setProperty('--p', `${(p * 112 - 10).toFixed(1)}%`);
@@ -483,6 +564,7 @@ $('#vol').oninput = e => {
   clearTimeout(volTimer); volTimer = setTimeout(() => source && run(() => source.setVolume(volume / 100)), 120);
 };
 document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palette.isOpen() ? palette.close() : palette.openPalette(); return; }
   if (e.target.matches('input, select, textarea')) return;
   if (e.code === 'Space') { e.preventDefault(); $('#btn-play').click(); }
   else if (e.code === 'ArrowRight') { e.preventDefault(); e.shiftKey ? $('#btn-next').click() : seekTo(position() + 5000); }
@@ -506,6 +588,7 @@ function showView(name) {
   moveTabThumb(true);
   updateMini();
   if (name === 'library') loadLibrary();
+  if (name === 'home') home.load();
   if (name === 'search') setTimeout(() => $('#search-input').focus(), 80);
 }
 function moveTabThumb(animate) {
@@ -542,7 +625,7 @@ function onTileClick(e) {
   if (t.dataset.kind) pages.openPage(t.dataset.kind, t.dataset.id);
   return true;
 }
-document.addEventListener('click', e => { if (e.target.closest('#view-detail .tile')) onTileClick(e); });
+document.addEventListener('click', e => { if (e.target.closest('#view-detail .tile, #view-home .tile')) onTileClick(e); });
 
 async function loadLibrary(force) {
   const el = $('#playlists');
@@ -739,6 +822,15 @@ async function startSource(kind) {
   }
 }
 
+// Film grain texture, generated once
+function makeGrain() {
+  const c = document.createElement('canvas'); c.width = c.height = 160;
+  const g = c.getContext('2d'), img = g.createImageData(160, 160);
+  for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  g.putImageData(img, 0, 0);
+  document.documentElement.style.setProperty('--grain-img', `url(${c.toDataURL()})`);
+}
+
 function showWelcome(on) { $('#welcome').classList.toggle('show', on); document.body.classList.toggle('welcome', on); }
 
 // Move audio between Lumen and other devices (used by the Devices panel)
@@ -750,6 +842,32 @@ async function switchMode(mode, { resume = false } = {}) {
   settings.playbackMode = mode; store.set('settings2', settings); syncSettingsUI();
   await startSource(mode);
   if (mode === 'app' && source?.deviceId) await api('/me/player', { method: 'PUT', body: { device_ids: [source.deviceId], play: resume } });
+}
+
+// Everything the command palette can do
+function paletteCommands() {
+  const go = (v, label, icon) => ({ group: 'Go to', title: label, icon, run: () => { pages.resetStack(); showView(v); } });
+  const cmds = [
+    go('home', 'Home', 'home'), go('nowplaying', 'Now Playing', 'note'), go('library', 'Library', 'library'), go('search', 'Search', 'search'),
+    { group: 'Playback', title: state.paused ? 'Play' : 'Pause', icon: state.paused ? 'play' : 'pause', hint: 'Space', run: () => $('#btn-play').click() },
+    { group: 'Playback', title: 'Next song', icon: 'next', hint: 'Shift →', run: () => $('#btn-next').click() },
+    { group: 'Playback', title: 'Previous song', icon: 'prev', hint: 'Shift ←', run: () => $('#btn-prev').click() },
+    { group: 'Playback', title: state.shuffle ? 'Turn shuffle off' : 'Turn shuffle on', icon: 'shuffle', run: () => $('#btn-shuffle').click() },
+    { group: 'Playback', title: 'Change repeat mode', icon: 'repeat', run: () => $('#btn-repeat').click() },
+    { group: 'Playback', title: 'Like / unlike this song', icon: 'heart', keywords: 'save favorite', run: () => pages.toggleNowPlayingLike() },
+    { group: 'Playback', title: 'Show queue', icon: 'queue', run: () => pages.openQueue() },
+    { group: 'Playback', title: 'Devices', icon: 'devices', keywords: 'speaker phone transfer output', run: () => devices.open() },
+    { group: 'App', title: 'Customize', icon: 'sliders', keywords: 'settings preferences', hint: 'Ctrl ,', run: () => openSettings() },
+    { group: 'App', title: 'New playlist', icon: 'plus', run: () => pages.createPlaylist().then(pl => pl && pages.openPage('playlist', pl.id)) },
+    { group: 'App', title: 'Check for updates', icon: 'download', run: () => checkUpdates(true) },
+    { group: 'App', title: 'Reset all settings', icon: 'sliders', run: resetSettings },
+  ];
+  for (const t of themes.list()) cmds.push({ group: 'Themes', title: `Theme: ${t.name}`, icon: 'sparkle', run: () => { themes.apply(t); syncSettingsUI(); } });
+  for (const g of SCHEMA) for (const item of g.items) {
+    if (item.options) for (const [v, label] of item.options) cmds.push({ group: 'Settings', title: `${g.group === 'General' ? '' : g.group + ' '}${item.label.toLowerCase() === 'style' ? 'style' : item.label}: ${label}`.trim(), icon: 'sliders', hint: settings[item.key] === v ? 'current' : '', run: () => setSetting(item.key, v) });
+    if (item.type === 'switch') cmds.push({ group: 'Settings', title: `${settings[item.key] ? 'Turn off' : 'Turn on'}: ${item.label}`, icon: 'sliders', run: () => setSetting(item.key, !settings[item.key]) });
+  }
+  return cmds;
 }
 
 function needReconnect() { if (isLoggedIn()) $('#reconnect').classList.add('show'); }
@@ -764,6 +882,12 @@ async function boot() {
     refreshLibrary: () => { libState = 'idle'; if (currentView === 'library') loadLibrary(true); },
   });
   devices.setup({ toast, switchMode, getSource: () => source, getState: () => state });
+  home.setup({ play, toast, needReconnect, isLoggedIn });
+  palette.setup({ commands: paletteCommands, play, openPage: (k, id) => pages.openPage(k, id), toast, isLoggedIn });
+  themes.setup({ settings, ITEMS, validate, applyAll, toast, store });
+  media.setup({ getState: () => state, position, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click(), seek: ms => seekTo(ms) });
+  $('#open-palette').onclick = () => palette.openPalette();
+  makeGrain();
   hydrateIcons();
   buildSettingsUI();
   applySettings();
@@ -788,11 +912,11 @@ async function boot() {
   catch (e) { $('#login-error').textContent = e.message; }
 
   syncSettingsUI();
-  if (isLoggedIn()) { startSource(settings.playbackMode); if (missingScopes().length) needReconnect(); }
+  if (isLoggedIn()) { startSource(settings.playbackMode); if (missingScopes().length) needReconnect(); showView(settings.startView); }
   else showWelcome(true);
   setupUpdates().catch(() => {});
 }
 boot();
 
 // For automated tests
-window.__lumen = { pages, devices, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };
+window.__lumen = { pages, devices, home, palette, themes, bgGl, applyAll, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };

@@ -185,7 +185,13 @@ export function openModal(html, mount) {
   window.__lumenGlass?.attach(wrap.firstChild);
   requestAnimationFrame(() => wrap.classList.add('show'));
   wrap.addEventListener('pointerdown', e => { if (e.target === wrap) closeModal(); });
-  modalClose = () => { wrap.classList.remove('show'); setTimeout(() => wrap.remove(), 300); modalClose = null; };
+  const close = () => {
+    // a closing dialog must not react to clicks while it fades out (they belong to whatever opens next)
+    wrap.classList.remove('show'); wrap.inert = true; wrap.style.pointerEvents = 'none'; wrap.firstChild.classList.add('closing');
+    setTimeout(() => wrap.remove(), 300);
+    if (modalClose === close) modalClose = null;
+  };
+  modalClose = close;
   mount?.(wrap.firstChild);
   wrap.querySelector('input, textarea')?.focus();
   return modalClose;

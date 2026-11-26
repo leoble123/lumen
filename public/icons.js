@@ -35,6 +35,9 @@ export const icons = {
   speaker: s('<rect x="5.5" y="2.5" width="13" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.2"/><circle cx="12" cy="7" r="1" fill="currentColor"/>'),
   tv: s('<rect x="2.5" y="4.5" width="19" height="13" rx="2"/><path d="M8 20.5h8"/>'),
   devices: s('<rect x="3" y="4" width="12" height="9" rx="1.5"/><path d="M1.5 16h15"/><rect x="16.5" y="8" width="5.5" height="11" rx="1.5"/>'),
+  home: s('<path d="M4 10.5L12 4l8 6.5V19a1.5 1.5 0 0 1-1.5 1.5H15v-6h-6v6H5.5A1.5 1.5 0 0 1 4 19z"/>'),
+  command: s('<path d="M9 6.5A2.5 2.5 0 1 0 6.5 9H9zM15 6.5A2.5 2.5 0 1 1 17.5 9H15zM9 17.5A2.5 2.5 0 1 1 6.5 15H9zM15 17.5a2.5 2.5 0 1 0 2.5-2.5H15zM9 9h6v6H9z"/>'),
+  sparkle: s('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/>'),
   person: s('<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>'),
 };
 

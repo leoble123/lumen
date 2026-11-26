@@ -1,16 +1,52 @@
 // Synced lyrics from LRCLIB (free, open lyrics database: https://lrclib.net)
 const cache = new Map();
 
+const WORD_TAG = /<(\d+):(\d+(?:\.\d+)?)>/g;
+const toMs = (m, s) => (Number(m) * 60 + Number(s)) * 1000;
+
+// Parses LRC, including "enhanced" LRC with per-word timestamps: [00:12.30]<00:12.30>I've <00:12.80>been
 export function parseLRC(lrc) {
   const lines = [];
   for (const raw of lrc.split(/\r?\n/)) {
     const stamps = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
     if (!stamps.length) continue;
-    const text = raw.replace(/\[[^\]]*\]/g, '').trim();
-    for (const s of stamps) lines.push({ time: (Number(s[1]) * 60 + Number(s[2])) * 1000, text });
+    const body = raw.replace(/\[[^\]]*\]/g, '');
+    let words = null;
+    if (WORD_TAG.test(body)) {
+      WORD_TAG.lastIndex = 0;
+      words = [];
+      const parts = body.split(/(<\d+:\d+(?:\.\d+)?>)/);
+      let at = null;
+      for (const part of parts) {
+        const m = part.match(/^<(\d+):(\d+(?:\.\d+)?)>$/);
+        if (m) { at = toMs(m[1], m[2]); continue; }
+        if (!part.trim() || at == null) continue;
+        for (const w of part.trim().split(/\s+/)) words.push({ t: at, text: w });
+      }
+      if (!words.length) words = null;
+    }
+    const text = body.replace(WORD_TAG, '').replace(/\s+/g, ' ').trim();
+    for (const s of stamps) lines.push({ time: toMs(s[1], s[2]), text, words: words && words.map(w => ({ ...w })) });
   }
   lines.sort((a, b) => a.time - b.time);
   return lines;
+}
+
+// Give every word a start time and duration. Real word timings are used when the LRC has them;
+// otherwise the line's singing time is shared out by word length (vowel-heavy words take longer).
+export function timeWords(line) {
+  const sungFor = Math.min(line.end - line.time, Math.max(1200, line.text.length * 80 + 300));
+  if (line.words?.length) {
+    return line.words.map((w, i) => {
+      const next = line.words[i + 1]?.t ?? Math.min(line.end, line.time + sungFor + 400);
+      return { text: w.text, t: w.t, d: Math.max(120, next - w.t) };
+    });
+  }
+  const words = line.text.split(/\s+/).filter(Boolean);
+  const weight = w => 1 + w.replace(/[^a-z\u00C0-\uFFFF]/gi, '').length + (w.match(/[aeiouy]/gi)?.length || 0) * 0.5;
+  const total = words.reduce((s, w) => s + weight(w), 0) || 1;
+  let at = line.time;
+  return words.map(w => { const d = sungFor * weight(w) / total; const o = { text: w, t: at, d }; at += d; return o; });
 }
 
 // Turn empty lines / long silences into "• • •" breathing dots, like Apple Music

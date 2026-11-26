@@ -13,9 +13,11 @@
   <!-- Animated background -->
   <div id="bg">
     <div id="bg-art"></div>
+    <canvas id="bg-gl"></canvas>
     <div class="blob" id="blob1"></div><div class="blob" id="blob2"></div><div class="blob" id="blob3"></div><div class="blob" id="blob4"></div>
     <div class="bg-dim"></div>
   </div>
+  <div id="grain"></div>
 
   <div id="titlebar"></div>
 
@@ -24,10 +26,17 @@
     <button id="btn-back" class="glass circle-btn" title="Back" aria-label="Back" data-icon="back"></button>
   </div>
   <div id="top-actions">
+    <button id="open-palette" class="glass circle-btn" title="Command palette (Ctrl+K)" aria-label="Command palette" data-icon="command"></button>
     <button id="open-devices" class="glass circle-btn" title="Devices" aria-label="Devices" data-icon="devices"></button>
     <button id="open-queue" class="glass circle-btn" title="Queue" aria-label="Queue" data-icon="queue"></button>
     <button id="open-settings" class="glass circle-btn" title="Customize" aria-label="Customize" data-icon="sliders"></button>
   </div>
+
+  <!-- ============ Home ============ -->
+  <main id="view-home" class="view scroll">
+    <div class="home-head"><h1 id="home-greet" class="page-title">Good evening</h1><div id="home-date"></div></div>
+    <div id="home-body"></div>
+  </main>
 
   <!-- ============ Now Playing ============ -->
   <main id="view-nowplaying" class="view active">
@@ -99,6 +108,7 @@
   <!-- Floating tab bar -->
   <nav id="tabbar" class="glass">
     <div id="tab-thumb"></div>
+    <button data-view="home"><span data-icon="home"></span><b>Home</b></button>
     <button data-view="nowplaying" class="active"><span data-icon="note"></span><b>Now Playing</b></button>
     <button data-view="library"><span data-icon="library"></span><b>Library</b></button>
     <button data-view="search"><span data-icon="search"></span><b>Search</b></button>
@@ -133,7 +143,7 @@
 
   <!-- Reconnect banner (new permissions) -->
   <div id="reconnect" class="glass">
-    <div><b>Unlock playlist editing & likes</b><span>Reconnect Spotify once to give Lumen the new permissions.</span></div>
+    <div><b>Unlock Lumen's new features</b><span>Reconnect Spotify once to allow Home, playlist editing and likes.</span></div>
     <button id="reconnect-btn" class="primary small">Reconnect</button>
     <button id="reconnect-close" class="ctl small" aria-label="Dismiss" data-icon="close"></button>
   </div>
