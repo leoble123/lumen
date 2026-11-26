@@ -1,5 +1,7 @@
 // Spotify login using PKCE (no client secret needed, safe for a desktop app)
-const REDIRECT_URI = `${location.origin}/callback`;
+import { ANDROID } from './platform.js';
+// On a computer Spotify sends you back to the local launcher; in the Android app, to lumen://callback
+export const REDIRECT_URI = ANDROID ? 'lumen://callback' : `${location.origin}/callback`;
 const SCOPES = [
   'streaming', 'user-read-email', 'user-read-private',
   'user-read-playback-state', 'user-modify-playback-state', 'user-read-currently-playing',
@@ -34,7 +36,9 @@ export async function login(clientId) {
     client_id: clientId, response_type: 'code', redirect_uri: REDIRECT_URI,
     scope: SCOPES, code_challenge_method: 'S256', code_challenge: challenge,
   });
-  location.href = `https://accounts.spotify.com/authorize?${params}`;
+  const url = `https://accounts.spotify.com/authorize?${params}`;
+  if (ANDROID) window.LumenAndroid.openAuth(url);   // opens a secure Chrome tab, comes back via lumen://callback
+  else location.href = url;
 }
 
 async function tokenRequest(body) {

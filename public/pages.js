@@ -162,6 +162,8 @@ async function trackMenu(anchor, t, i, cfg) {
     '-',
     t.album?.id && !cfg.hideAlbumLink && { label: 'Go to album', icon: 'album', action: () => openPage('album', t.album.id) },
     t.artists[0]?.id && { label: `Go to ${t.artists[0].name}`, icon: 'person', action: () => openPage('artist', t.artists[0].id) },
+    cfg.reorder && i > 0 && { label: 'Move up', icon: 'up', action: () => cfg.reorder(i, i - 1) },
+    cfg.reorder && i < cfg.tracks.length - 1 && { label: 'Move down', icon: 'down', action: () => cfg.reorder(i, i + 2) },
     cfg.onRemove && '-',
     cfg.onRemove && { label: cfg.removeLabel || 'Remove from this playlist', icon: 'trash', danger: true, action: () => cfg.onRemove(i) },
   ]);

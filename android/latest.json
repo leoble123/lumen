@@ -1,0 +1,7 @@
+{
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "apk": "android/releases/lumen-1.0.0.apk",
+  "sha256": "8c230d9d5465a209802b1840c56c8d5cb756c3bc549007a99323dcf218921afc",
+  "notes": "First version of Lumen for Android."
+}

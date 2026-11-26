@@ -19,6 +19,24 @@ Lumen doesn't modify the Spotify app, so Spotify updates can't break it.
    (create a free app at developer.spotify.com, paste the Client ID).
    You need Spotify Premium to play music. Spotify requires it for all developer apps.
 
+## Android app
+Install **`android/releases/lumen-1.0.0.apk`** on your phone or tablet (allow "install unknown apps" for your browser
+or file manager when asked).
+
+1. In the Spotify Developer Dashboard, open your Lumen app → **Edit settings** → add the Redirect URI
+   **`lumen://callback`** (keep the `http://127.0.0.1:8888/callback` one for your computer) → Save.
+2. Open Lumen, paste your Client ID, and log in. Spotify's login opens in a secure Chrome tab, so Google sign-in works.
+
+On Android, Lumen shows and controls what the **Spotify app** plays. Spotify doesn't allow its web player on phones,
+so Lumen can't play the audio itself there. Everything else works: lyrics, pages, queue, devices, playlist editing,
+themes. On phones, tap the 💬 button in Now Playing for full-screen lyrics. The back button closes panels, then goes back.
+
+**Updates:** Lumen inside the app updates itself over the air from this repo (same fingerprint checks and automatic
+rollback as on the computer). The rare update to the app itself shows an **Install** button in Lumen.
+
+Building the APK yourself: `android/build.sh` (needs the Android SDK, JDK 17+, and the signing key in
+`android/keystore.properties`, which is never committed).
+
 ## Updates (automatic)
 Lumen updates itself over the air. When it opens (and every few hours) it checks
 github.com/leoble123/lumen for a new version, downloads it in the background, and shows a

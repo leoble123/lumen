@@ -2,6 +2,7 @@
 import { api } from './api.js';
 import { icons } from './icons.js';
 
+import { ANDROID } from './platform.js';
 let ctx;   // { toast, getSource, getState, switchMode(mode, { resume }) }
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,10 +42,10 @@ export async function refresh() {
         ${vol && d.is_active ? `<div class="dev-vol">${icons.volLow}<input type="range" min="0" max="100" value="${d.volume_percent}" data-vol="${esc(d.id)}">${icons.volHigh}</div>` : ''}
       </div></div>`;
   };
-  body.innerHTML = `<div class="group-title">This computer</div><div class="group">${row(lumenDev, true)}</div>
-    <div class="group-title">Other devices</div>
+  body.innerHTML = (ANDROID ? '' : `<div class="group-title">This computer</div><div class="group">${row(lumenDev, true)}</div>`) + `
+    <div class="group-title">${ANDROID ? 'Your devices' : 'Other devices'}</div>
     <div class="group">${others.length ? others.map(d => row(d, false)).join('') : '<p class="empty dev-empty">Open Spotify on your phone, speaker or TV and it will show up here.</p>'}</div>
-    <p class="set-hint q-note">To change which speakers or headphones your computer uses, pick them in your computer's sound settings — Lumen plays through whatever is selected there.</p>`;
+    <p class="set-hint q-note">${ANDROID ? 'Lumen on Android shows and controls what Spotify is playing. Bluetooth speakers and headphones are chosen in the Spotify app or your phone\'s settings.' : 'To change which speakers or headphones your computer uses, pick them in your computer\'s sound settings — Lumen plays through whatever is selected there.'}</p>`;
   body.querySelectorAll('input[data-vol]').forEach(inp => {
     const fill = () => inp.style.setProperty('--fill', inp.value + '%'); fill();
     let t; inp.oninput = () => { fill(); clearTimeout(t); t = setTimeout(() => setVolume(inp.dataset.vol, Number(inp.value)), 150); };

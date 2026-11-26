@@ -15,6 +15,8 @@ import * as wallpaper from './wallpaper.js';
 import * as particles from './particles.js';
 import * as fonts from './fonts.js';
 import * as cssedit from './cssedit.js';
+import { ANDROID, call as nativeCall, info as nativeInfo } from './platform.js';
+if (ANDROID) document.body.classList.add('android');
 import { missingScopes } from './auth.js';
 window.__lumenGlass = glass;
 
@@ -43,7 +45,7 @@ const SCHEMA = [
     { key: 'showTopButtons', type: 'switch', label: 'Always show top buttons', def: true, hint: 'When off, they appear when you point at the top-right corner.' },
   ]},
   { group: 'Playback', items: [
-    { key: 'playbackMode', type: 'seg', label: 'Play audio in', def: 'app', options: [['app', 'Lumen'], ['remote', 'Spotify app']],
+    { key: 'playbackMode', type: 'seg', label: 'Play audio in', def: ANDROID ? 'remote' : 'app', options: [['app', 'Lumen'], ['remote', 'Spotify app']], showIf: () => !ANDROID,
       hint: '“Spotify app” lets the normal Spotify app (or your phone) play the music while Lumen shows lyrics & controls.' },
   ]},
   { group: 'Glass', items: [
@@ -572,6 +574,19 @@ box.addEventListener('wheel', e => {
   if (synced) manualTimer = setTimeout(() => { manualOffset = 0; positionLines(); }, 2500);
 }, { passive: false });
 new ResizeObserver(() => layoutLyrics()).observe(box);
+// Touch: drag the lyrics to look ahead, like the scroll wheel on a computer
+let touchY = null;
+box.addEventListener('touchstart', e => { if (e.touches.length === 1) { touchY = e.touches[0].clientY; inner.classList.add('dragging'); } }, { passive: true });
+box.addEventListener('touchmove', e => {
+  if (touchY == null || !lineEls.length || (synced && settings.lyricStyle === 'single')) return;
+  const y = e.touches[0].clientY; manualOffset += y - touchY; touchY = y;
+  manualOffset = Math.max(-(tops.at(-1) || 0), Math.min(box.clientHeight * 0.5, manualOffset));
+  positionLines(true); e.preventDefault();
+}, { passive: false });
+box.addEventListener('touchend', () => {
+  touchY = null; clearTimeout(manualTimer); inner.classList.remove('dragging');
+  if (synced && manualOffset) manualTimer = setTimeout(() => { manualOffset = 0; positionLines(); }, 2500);
+});
 
 let lastWordLine = null;
 function tickLyrics(pos) {
@@ -645,6 +660,7 @@ $('#open-devices').onclick = () => devices.toggle();
 $('#close-devices').onclick = () => devices.close();
 $('#device-label').onclick = () => devices.open();
 $('#open-queue').onclick = () => pages.toggleQueue();
+$('#btn-lyrics').onclick = () => { document.body.classList.toggle('np-lyrics'); $('#btn-lyrics').classList.toggle('on', document.body.classList.contains('np-lyrics')); requestAnimationFrame(layoutLyrics); };
 $('#close-queue').onclick = () => pages.closeQueue();
 $('#btn-like').onclick = () => pages.toggleNowPlayingLike();
 $('#title').onclick = () => state.track?.albumId && state.track.id !== 'demo' && pages.openPage('album', state.track.albumId);
@@ -847,6 +863,7 @@ let runningVersion = '', readyVersion = '';
 const U = window.LumenUpdate;
 
 async function setupUpdates() {
+  if (ANDROID) return setupNativeUpdates();
   if (!U || !navigator.serviceWorker?.controller) return;
   const meta = await U.getMeta();
   runningVersion = meta.version || '';
@@ -860,8 +877,49 @@ async function setupUpdates() {
   setInterval(() => settings.autoUpdate && checkUpdates(false), CHECK_EVERY);
 }
 
+// In the Android app, the app itself downloads + verifies updates (same version.json, same SHA-256 checks)
+function setupNativeUpdates() {
+  const i = nativeInfo() || {};
+  runningVersion = i.webVersion || '';
+  if (i.rolledBack) toast(`Update ${i.rolledBack} didn't start correctly, so Lumen went back to ${runningVersion}.`);
+  window.LumenAndroid.markHealthy();
+  syncSettingsUI();
+  if (settings.autoUpdate) setTimeout(() => checkUpdates(false), 4000);
+  setInterval(() => settings.autoUpdate && checkUpdates(false), CHECK_EVERY);
+  setTimeout(checkApkUpdate, 8000);
+}
+
+// Rarely, the Android app itself (not just Lumen inside it) gets an update
+async function checkApkUpdate() {
+  try {
+    const r = await nativeCall('checkApkUpdate');
+    if (!r.available) return;
+    $('#update-title').textContent = `Lumen app ${r.versionName} is available`;
+    $('#update-notes').textContent = r.notes || 'A new version of the Android app.';
+    $('#update-restart').textContent = 'Install';
+    $('#update-restart').onclick = async () => {
+      $('#update-restart').textContent = 'Downloading…';
+      try { await nativeCall('installApk'); } catch (e) { toast(e.message); }
+      $('#update-restart').textContent = 'Install';
+    };
+    $('#update').classList.add('show');
+  } catch { /* offline: try again next launch */ }
+}
+
 let updateRun = null;
 function checkUpdates(manual) {
+  if (ANDROID) {
+    const btn = $('#set-check');
+    if (!updateRun) {
+      btn.textContent = 'Checking…';
+      updateRun = nativeCall('checkForUpdates')
+        .then(res => { if (res.updated) { readyVersion = res.version; showUpdateReady(res); } return res; })
+        .finally(() => { updateRun = null; btn.textContent = 'Check for updates'; syncSettingsUI(); });
+    }
+    return updateRun.then(res => {
+      if (manual && !res.updated) toast(readyVersion ? `Version ${readyVersion} is ready — restart Lumen to use it.` : `You're up to date (version ${res.version}).`);
+    }, e => { if (manual) toast(`Couldn't update: ${e.message}`); });
+  }
   if (!U || !navigator.serviceWorker?.controller) {
     if (manual) toast('Updates work once Lumen is opened from the launcher or installed app.');
     return Promise.resolve();
@@ -884,13 +942,14 @@ function showUpdateReady({ version, notes }) {
   $('#update-notes').textContent = notes || 'Restart to get the latest version.';
   $('#update').classList.add('show');
 }
-$('#update-restart').onclick = () => location.reload();
+$('#update-restart').onclick = () => ANDROID ? window.LumenAndroid.restart() : location.reload();
 $('#update-later').onclick = () => { $('#update').classList.remove('show'); toast('The update will be used next time you open Lumen.'); };
 
 /* =====================================================================
    START-UP
    ===================================================================== */
 async function startSource(kind) {
+  if (ANDROID && kind === 'app') kind = 'remote';   // Spotify's web player doesn't run on phones
   source?.stop();
   source = null;
   currentTrackId = undefined;
@@ -913,6 +972,18 @@ async function startSource(kind) {
     toast(e.message);
   }
 }
+
+// Android back button: close whatever is open, then go back a page, then back to Home
+window.__lumenBack = () => {
+  if (palette.isOpen()) { palette.close(); return true; }
+  if (document.querySelector('#menu.show')) { pages.closeMenu(); return true; }
+  if (document.querySelector('.modal-wrap.show')) { pages.closeModal(); return true; }
+  for (const id of ['#settings', '#queue', '#devices']) if ($(id).classList.contains('open')) { $(id).classList.remove('open'); return true; }
+  if (document.body.classList.contains('np-lyrics')) { document.body.classList.remove('np-lyrics'); return true; }
+  if (currentView === 'detail') { pages.back(); return true; }
+  if (currentView !== 'home' && !document.body.classList.contains('welcome')) { pages.resetStack(); showView('home'); return true; }
+  return false;
+};
 
 // Reveal the auto-hidden tab bar when the pointer gets near it
 window.addEventListener('pointermove', e => {
@@ -984,7 +1055,7 @@ async function boot() {
   home.setup({ play, toast, needReconnect, isLoggedIn });
   palette.setup({ commands: paletteCommands, play, openPage: (k, id) => pages.openPage(k, id), toast, isLoggedIn });
   themes.setup({ settings, ITEMS, validate, applyAll, toast, store });
-  media.setup({ getState: () => state, position, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click(), seek: ms => seekTo(ms) });
+  media.setup({ disabled: ANDROID, getState: () => state, position, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click(), seek: ms => seekTo(ms) });
   $('#open-palette').onclick = () => palette.openPalette();
   makeGrain();
   cssedit.setup({ store, toast });
@@ -995,7 +1066,9 @@ async function boot() {
   glass.attachAll();
   $('#vol').value = volume; setFill($('#vol'));
   $('#client-id').value = store.get('clientId') || '';
-  $('#copy-redirect').onclick = () => navigator.clipboard?.writeText('http://127.0.0.1:8888/callback').then(() => toast('Copied!'), () => toast('Select the text and copy it manually.'));
+  const redirect = ANDROID ? 'lumen://callback' : 'http://127.0.0.1:8888/callback';
+  $('#copy-redirect code').textContent = redirect;
+  $('#copy-redirect').onclick = () => navigator.clipboard?.writeText(redirect).then(() => toast('Copied!'), () => toast('Select the text and copy it manually.'));
   $('#btn-login').onclick = () => {
     const id = $('#client-id').value.trim();
     if (!/^[0-9a-f]{32}$/i.test(id)) { $('#login-error').textContent = 'That doesn’t look like a Client ID — it’s 32 letters and numbers.'; return; }
@@ -1004,7 +1077,7 @@ async function boot() {
   $('#client-id').addEventListener('keydown', e => { if (e.key === 'Enter') $('#btn-login').click(); });
   $('#btn-demo').onclick = () => { showWelcome(false); startSource('demo'); };
   requestAnimationFrame(t => { lastFrame = t; frame(t); });
-  if ('serviceWorker' in navigator && location.protocol === 'http:' && location.hostname === '127.0.0.1') {
+  if (!ANDROID && 'serviceWorker' in navigator && location.protocol === 'http:' && location.hostname === '127.0.0.1') {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
 
@@ -1019,4 +1092,4 @@ async function boot() {
 boot();
 
 // For automated tests
-window.__lumen = { pages, devices, home, palette, themes, bgGl, applyAll, wallpaper, particles, cssedit, get artPalettes() { return artPalettes; }, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };
+window.__lumen = { ANDROID, pages, devices, home, palette, themes, bgGl, applyAll, wallpaper, particles, cssedit, get artPalettes() { return artPalettes; }, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };

@@ -16,7 +16,7 @@ function silentWav(seconds = 2) {
 
 export function setup(c) {
   ctx = c;
-  if (!('mediaSession' in navigator)) return;
+  if (!('mediaSession' in navigator) || c.disabled) return;
   const ms = navigator.mediaSession;
   const safe = fn => () => { try { fn(); } catch {} };
   ms.setActionHandler('play', safe(() => ctx.getState().paused && ctx.toggle()));
@@ -43,7 +43,7 @@ function ensureAnchor() {
 }
 
 export function update() {
-  if (!ctx || !('mediaSession' in navigator)) return;
+  if (!ctx || ctx.disabled || !('mediaSession' in navigator)) return;
   const s = ctx.getState(), t = s.track, ms = navigator.mediaSession;
   if (!t) { ms.metadata = null; ms.playbackState = 'none'; return; }
   ensureAnchor();
