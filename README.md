@@ -46,6 +46,16 @@ playing, recently played songs, your top artists, what's on repeat, your saved a
   as a code, or import a friend's.
 - **Backgrounds:** GPU-rendered Mesh gradient, Aurora, Lava lamp, Waves, Starfield, plus Fluid, Album art and Solid,
   with motion, intensity and film-grain sliders. They all take their colors from the album art.
+- **Layout:** Classic, Big art, Lyrics only (zen) or Compact; album art as Rounded, Square, Circle, a spinning
+  **Vinyl** record or a **CD**; tab bar at the bottom, top or side (or hidden until you point at it); show or hide
+  volume, song times, "Playing on" and the top buttons.
+- **Appearance:** Dark, OLED black, or Light.
+- **Glass:** Liquid / Frosted / Tinted, plus refraction, thickness, color fringe, edge shine, tint color and corner roundness.
+- **Your own wallpaper:** any image or looping video (kept on your computer), with dim and blur.
+- **Particles:** dust, bokeh, snow or fireflies in your album colors.
+- **Album colors:** Vibrant, Muted, Dark or Light palettes picked from the cover (via node-vibrant), or your own color.
+- **Fonts:** 36 Google Fonts, chosen separately for lyrics and for the app.
+- **Custom CSS** (Advanced): restyle anything with your own CSS, Spicetify-style, with live preview.
 - **Lyrics styles:** Word by word (each word lights up and lifts as it's sung), Line sweep, Minimal and One line,
   with size, glow, letter spacing and line spacing controls.
 
@@ -90,6 +100,7 @@ Ctrl/Cmd+, = customize · click a lyric line to jump to it · scroll the lyrics 
   loads more with "Show more songs".
 
 ## Credits
-Ideas borrowed from great open-source projects (no code copied): Apple Music-like Lyrics (AMLL) and Beautiful Lyrics
+Bundled open-source libraries (MIT, see `public/vendor/LICENSES.txt`): node-vibrant (album palettes) and CodeMirror 5
+(CSS editor). Ideas borrowed from great open-source projects (no code copied): Apple Music-like Lyrics (AMLL) and Beautiful Lyrics
 for word-by-word lyrics, whatamesh for mesh gradients, and cmdk / ninja-keys for the command palette.
 Lyrics: [LRCLIB](https://lrclib.net).

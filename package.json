@@ -1,6 +1,6 @@
 {
   "name": "lumen-player",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "A personal Spotify player with Apple Music-style lyrics",
   "main": "main.js",
   "scripts": {

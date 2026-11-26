@@ -11,6 +11,10 @@ import * as home from './home.js';
 import * as palette from './palette.js';
 import * as media from './media.js';
 import * as themes from './themes.js';
+import * as wallpaper from './wallpaper.js';
+import * as particles from './particles.js';
+import * as fonts from './fonts.js';
+import * as cssedit from './cssedit.js';
 import { missingScopes } from './auth.js';
 window.__lumenGlass = glass;
 
@@ -26,6 +30,17 @@ const GL_STYLES = ['mesh', 'aurora', 'lava', 'waves', 'stars'];
 const SCHEMA = [
   { group: 'General', items: [
     { key: 'startView', type: 'seg', label: 'Open Lumen on', def: 'home', options: [['home', 'Home'], ['nowplaying', 'Now Playing']] },
+    { key: 'appearance', type: 'seg', label: 'Appearance', def: 'dark', options: [['dark', 'Dark'], ['oled', 'OLED black'], ['light', 'Light']] },
+  ]},
+  { group: 'Layout', items: [
+    { key: 'layout', type: 'chips', label: 'Now Playing layout', def: 'classic', options: [['classic', 'Classic'], ['centered', 'Big art'], ['zen', 'Lyrics only'], ['compact', 'Compact']] },
+    { key: 'artStyle', type: 'chips', label: 'Album art', def: 'rounded', options: [['rounded', 'Rounded'], ['square', 'Square'], ['circle', 'Circle'], ['vinyl', 'Vinyl'], ['cd', 'CD']] },
+    { key: 'tabbarPos', type: 'seg', label: 'Tab bar', def: 'bottom', options: [['bottom', 'Bottom'], ['top', 'Top'], ['side', 'Side']] },
+    { key: 'autoHideTabbar', type: 'switch', label: 'Hide tab bar until I point at it', def: false },
+    { key: 'showVolume', type: 'switch', label: 'Show volume', def: true },
+    { key: 'showTimes', type: 'switch', label: 'Show song times', def: true },
+    { key: 'showDeviceLabel', type: 'switch', label: 'Show “Playing on”', def: true },
+    { key: 'showTopButtons', type: 'switch', label: 'Always show top buttons', def: true, hint: 'When off, they appear when you point at the top-right corner.' },
   ]},
   { group: 'Playback', items: [
     { key: 'playbackMode', type: 'seg', label: 'Play audio in', def: 'app', options: [['app', 'Lumen'], ['remote', 'Spotify app']],
@@ -34,14 +49,25 @@ const SCHEMA = [
   { group: 'Glass', items: [
     { key: 'glass', type: 'seg', label: 'Style', def: 'liquid', options: [['liquid', 'Liquid'], ['frosted', 'Frosted'], ['tinted', 'Tinted']] },
     { key: 'refraction', type: 'range', label: 'Refraction', def: 60, min: 0, max: 100, step: 1, unit: '%', showIf: s => s.glass === 'liquid' },
+    { key: 'glassThickness', type: 'range', label: 'Thickness', def: 1, min: 0.5, max: 2, step: 0.1, unit: '×', showIf: s => s.glass === 'liquid' },
+    { key: 'glassFringe', type: 'range', label: 'Color fringe', def: 40, min: 0, max: 100, step: 1, unit: '%', showIf: s => s.glass === 'liquid' },
+    { key: 'glassShine', type: 'range', label: 'Edge shine', def: 60, min: 0, max: 100, step: 1, unit: '%' },
+    { key: 'glassTintAmount', type: 'range', label: 'Tint', def: 0, min: 0, max: 60, step: 1, unit: '%' },
+    { key: 'glassTint', type: 'color', label: 'Tint color', def: '#7a5cff', showIf: s => s.glassTintAmount > 0 },
+    { key: 'roundness', type: 'range', label: 'Corner roundness', def: 1, min: 0.2, max: 1.6, step: 0.1, unit: '×' },
   ]},
   { group: 'Background', items: [
-    { key: 'bgStyle', type: 'chips', label: 'Style', def: 'mesh', options: [['mesh', 'Mesh'], ['fluid', 'Fluid'], ['aurora', 'Aurora'], ['lava', 'Lava lamp'], ['waves', 'Waves'], ['stars', 'Starfield'], ['album', 'Album art'], ['solid', 'Solid']] },
+    { key: 'bgStyle', type: 'chips', label: 'Style', def: 'mesh', options: [['mesh', 'Mesh'], ['fluid', 'Fluid'], ['aurora', 'Aurora'], ['lava', 'Lava lamp'], ['waves', 'Waves'], ['stars', 'Starfield'], ['album', 'Album art'], ['wallpaper', 'My wallpaper'], ['solid', 'Solid']] },
+    { key: '_wallpaper', type: 'wallpaper', label: 'Wallpaper', showIf: s => s.bgStyle === 'wallpaper' },
+    { key: 'wpDim', type: 'range', label: 'Dim', def: 25, min: 0, max: 85, step: 1, unit: '%', showIf: s => s.bgStyle === 'wallpaper' },
+    { key: 'wpBlur', type: 'range', label: 'Blur', def: 0, min: 0, max: 60, step: 1, unit: 'px', showIf: s => s.bgStyle === 'wallpaper' },
     { key: 'bgMotion', type: 'range', label: 'Motion', def: 1, min: 0, max: 3, step: 0.1, unit: '×', showIf: s => s.bgStyle === 'fluid' || GL_STYLES.includes(s.bgStyle) },
     { key: 'bgIntensity', type: 'range', label: 'Intensity', def: 50, min: 0, max: 100, step: 1, unit: '%', showIf: s => GL_STYLES.includes(s.bgStyle) },
     { key: 'bgBlur', type: 'range', label: 'Softness', def: 90, min: 30, max: 160, step: 1, unit: 'px', showIf: s => s.bgStyle === 'fluid' || s.bgStyle === 'album' },
     { key: 'grain', type: 'range', label: 'Film grain', def: 12, min: 0, max: 100, step: 1, unit: '%' },
-    { key: 'accentMode', type: 'seg', label: 'Colors', def: 'auto', options: [['auto', 'From album'], ['custom', 'Custom']] },
+    { key: 'particles', type: 'chips', label: 'Particles', def: 'none', options: [['none', 'None'], ['dust', 'Dust'], ['bokeh', 'Bokeh'], ['snow', 'Snow'], ['fireflies', 'Fireflies']] },
+    { key: 'particleAmount', type: 'range', label: 'Particle amount', def: 50, min: 10, max: 100, step: 1, unit: '%', showIf: s => s.particles !== 'none' },
+    { key: 'accentMode', type: 'chips', label: 'Colors from album', def: 'auto', options: [['auto', 'Vibrant'], ['muted', 'Muted'], ['dark', 'Dark'], ['light', 'Light'], ['custom', 'Custom']] },
     { key: 'accent', type: 'color', label: 'Custom color', def: '#7a5cff', showIf: s => s.accentMode === 'custom' },
   ]},
   { group: 'Lyrics', items: [
@@ -52,22 +78,24 @@ const SCHEMA = [
     { key: 'letterSpacing', type: 'range', label: 'Letter spacing', def: -2.5, min: -6, max: 10, step: 0.5, unit: '' },
     { key: 'lineSpacing', type: 'range', label: 'Line spacing', def: 1, min: 0.5, max: 2.5, step: 0.1, unit: '×' },
     { key: 'lyricSpeed', type: 'range', label: 'Scroll speed', def: 1, min: 0.5, max: 2, step: 0.1, unit: '×' },
-    { key: 'font', type: 'select', label: 'Font', def: 'system', options: [['system', 'System'], ['rounded', 'Rounded'], ['serif', 'Serif'], ['mono', 'Mono']] },
+
     { key: 'blurInactive', type: 'switch', label: 'Blur other lines', def: true, showIf: s => s.lyricStyle === 'apple' || s.lyricStyle === 'karaoke' },
     { key: 'showGaps', type: 'switch', label: 'Dots during instrumentals', def: true },
+  ]},
+  { group: 'Fonts', items: [
+    { key: 'font', type: 'select', label: 'Lyrics font', def: 'system', options: fonts.OPTIONS },
+    { key: 'uiFont', type: 'select', label: 'App font', def: 'system', options: fonts.OPTIONS },
+  ]},
+  { group: 'Advanced', items: [
+    { key: '_css', type: 'button', label: 'Edit custom CSS…', action: () => cssedit.open(), hint: 'Style anything with your own CSS (like Spicetify). Saved on this computer only.' },
   ]},
   { group: 'Updates', items: [
     { key: 'autoUpdate', type: 'switch', label: 'Automatic updates', def: true },
   ]},
 ];
-const ITEMS = SCHEMA.flatMap(g => g.items);
+const ALL_ITEMS = SCHEMA.flatMap(g => g.items);
+const ITEMS = ALL_ITEMS.filter(i => !i.key.startsWith('_'));
 const DEFAULTS = Object.fromEntries(ITEMS.map(i => [i.key, i.def]));
-const FONTS = {
-  system: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", Inter, Roboto, sans-serif',
-  rounded: '"SF Pro Rounded", ui-rounded, "Nunito", "Varela Round", "Segoe UI", sans-serif',
-  serif: '"New York", ui-serif, "Iowan Old Style", Georgia, "Times New Roman", serif',
-  mono: 'ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace',
-};
 
 function validate(item, v) {
   switch (item.type) {
@@ -115,21 +143,38 @@ function resetSettings() {
 }
 
 // Everything visual is derived from `settings` + current album colors, so any change is fully reversible
+function setBodyFlag(prefix, value) {
+  const keep = [...document.body.classList].filter(c => !c.startsWith(prefix + '-'));
+  document.body.className = [...keep, `${prefix}-${value}`].join(' ');
+}
+
 function applySettings() {
   const r = document.documentElement.style;
   r.setProperty('--lyric-size', settings.lyricSize + 'px');
   r.setProperty('--lyric-speed', settings.lyricSpeed);
   r.setProperty('--bg-blur', settings.bgBlur + 'px');
-  r.setProperty('--font', FONTS[settings.font]);
+  r.setProperty('--font', fonts.stack(settings.font));
+  r.setProperty('--ui-font', fonts.stack(settings.uiFont));
+  r.setProperty('--glass-shine', settings.glassShine / 100);
+  r.setProperty('--glass-tint', settings.glassTint);
+  r.setProperty('--glass-tint-a', settings.glassTintAmount / 100);
+  r.setProperty('--round', settings.roundness);
+  r.setProperty('--wp-dim', settings.wpDim / 100);
+  r.setProperty('--wp-blur', settings.wpBlur + 'px');
+  const flags = { appearance: settings.appearance, layout: settings.layout, art: settings.artStyle, tabbar: settings.tabbarPos };
+  for (const [k, v] of Object.entries(flags)) setBodyFlag(k, v);
+  const toggles = { 'autohide-tabbar': settings.autoHideTabbar, 'hide-volume': !settings.showVolume, 'hide-times': !settings.showTimes, 'hide-device': !settings.showDeviceLabel, 'hide-topbtns': !settings.showTopButtons };
+  for (const [c, on] of Object.entries(toggles)) document.body.classList.toggle(c, on);
+  particles.set(settings.particles, settings.particleAmount);
   r.setProperty('--lyric-glow', settings.lyricGlow / 100);
   r.setProperty('--lyric-ls', settings.letterSpacing);
   r.setProperty('--grain', settings.grain / 100);
   document.body.classList.toggle('align-center', settings.lyricAlign === 'center');
-  document.body.className = document.body.className.replace(/\blyric-\w+/g, '').trim() + ` lyric-${settings.lyricStyle}`;
-  glass.configure(settings.glass, settings.refraction / 100);
+  setBodyFlag('lyric', settings.lyricStyle);
+  glass.configure(settings.glass, settings.refraction / 100, { thickness: settings.glassThickness, fringe: settings.glassFringe / 100 * 0.06 });
   applyColors();
   applyBackground();
-  requestAnimationFrame(() => { layoutLyrics(); moveTabThumb(); });
+  requestAnimationFrame(() => { layoutLyrics(); moveTabThumb(); updateMini(); });
 }
 
 /* ---------- Settings UI (built from the schema) ---------- */
@@ -164,7 +209,23 @@ function buildControl(item) {
   row.className = 'set-row' + (item.type === 'switch' || item.type === 'color' || item.type === 'select' ? ' inline' : '');
   const fmt = v => item.unit === '×' ? `${Number(v).toFixed(1)}×` : item.unit === '' ? (v > 0 ? `+${v}` : `${v}`) : `${v}${item.unit}`;
   let update;
-  if (item.type === 'chips') {
+  if (item.type === 'button') {
+    row.className = 'set-row';
+    row.innerHTML = `<button class="set-btn inline-btn">${item.label}</button>${item.hint ? `<div class="set-hint">${item.hint}</div>` : ''}`;
+    row.querySelector('button').onclick = item.action;
+    update = () => {};
+  } else if (item.type === 'wallpaper') {
+    row.innerHTML = `<div class="set-label">${item.label}<span class="val wp-name"></span></div>
+      <div class="wp-btns"><label class="pill-btn wp-pick">Choose image or video…<input type="file" accept="image/*,video/*" hidden></label><button class="pill-btn wp-clear">Remove</button></div>`;
+    const name = row.querySelector('.wp-name');
+    row.querySelector('input').onchange = async e => {
+      const f = e.target.files[0]; if (!f) return;
+      try { await wallpaper.save(f); toast('Wallpaper set'); applyBackground(); update(); } catch (err) { toast(err.message); }
+      e.target.value = '';
+    };
+    row.querySelector('.wp-clear').onclick = async () => { await wallpaper.clear(); applyBackground(); update(); };
+    update = () => { wallpaper.info().then(i => { name.textContent = i ? i.name : 'none yet'; }); };
+  } else if (item.type === 'chips') {
     row.innerHTML = `<div class="set-label">${item.label}</div><div class="chips">${item.options.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div>`;
     const box = row.querySelector('.chips');
     box.onclick = e => { const b = e.target.closest('button'); if (b) setSetting(item.key, b.dataset.v); };
@@ -202,6 +263,7 @@ function buildControl(item) {
     c.oninput = () => setSetting(item.key, c.value);
     update = () => { if (document.activeElement !== c) c.value = settings[item.key]; };
   }
+  if (item.hint && item.type === 'switch') row.insertAdjacentHTML('beforeend', `<div class="set-hint full">${item.hint}</div>`);
   controls.set(item.key, { row, update, item });
   return row;
 }
@@ -265,6 +327,27 @@ function extractColors(img) {
   } catch { return null; }
 }
 
+// Album palettes from node-vibrant (MIT): Vibrant / Muted / Dark / Light, each a background set + accent
+let artPalettes = null;
+async function vibrantPalettes(img) {
+  if (!window.Vibrant) return null;
+  try {
+    const p = await window.Vibrant.from(img).quality(3).getPalette();
+    const hex = k => p[k] ? (p[k].getHex ? p[k].getHex() : p[k].hex) : null;
+    const pick = (...ks) => ks.map(hex).find(Boolean);
+    const V = pick('Vibrant', 'LightVibrant', 'Muted', 'DarkVibrant'), M = pick('Muted', 'DarkMuted', 'Vibrant'), DV = pick('DarkVibrant', 'DarkMuted', 'Vibrant'),
+      DM = pick('DarkMuted', 'DarkVibrant', 'Muted'), LV = pick('LightVibrant', 'Vibrant', 'LightMuted'), LM = pick('LightMuted', 'Muted', 'LightVibrant');
+    if (!V) return null;
+    const dim = h => toHex(mix(fromHex(h), [0, 0, 0], 0.15));
+    return {
+      auto: { bg: [V, DV, LV, DM].map(dim), accent: V },
+      muted: { bg: [M, DM, LM, DV].map(dim), accent: LM || M },
+      dark: { bg: [DV, DM, toHex(mix(fromHex(V), [0, 0, 0], 0.5)), '#0b0b12'], accent: V },
+      light: { bg: [LV, LM, V, M], accent: DV },
+    };
+  } catch { return null; }
+}
+
 function applyColors() {
   const r = document.documentElement.style;
   let bg, accent;
@@ -273,18 +356,23 @@ function applyColors() {
     accent = settings.accent;
     bg = [mix(a, [0, 0, 0], .25), mix(a, [255, 255, 255], .15), mix(a, [0, 0, 40], .55), mix(a, [0, 0, 0], .7)].map(toHex);
   } else {
-    const src = artColors || DEFAULT_COLORS;
+    const src = artPalettes?.[settings.accentMode] || artColors || DEFAULT_COLORS;
     bg = src.bg; accent = src.accent;
   }
+  if (settings.appearance === 'light') bg = bg.map(h => toHex(mix(fromHex(h), [255, 255, 255], 0.55)));
   r.setProperty('--accent', accent);
   r.setProperty('--accent-text', lum(fromHex(accent)) > 0.62 ? '#000' : '#fff');
   ['--c1', '--c2', '--c3', '--c4'].forEach((v, i) => r.setProperty(v, bg[i]));
   r.setProperty('--solid', toHex(mix(fromHex(bg[0]), [0, 0, 0], .35)));
   bgGl.setColors(bg);
+  particles.setColors([accent, ...bg]);
 }
 
 function applyBackground() {
   let style = settings.bgStyle;
+  if (settings.appearance === 'oled') style = 'oled';
+  wallpaper.setActive(style === 'wallpaper');
+  if (style === 'wallpaper') wallpaper.load().then(has => { if (!has && settings.bgStyle === 'wallpaper') $('#bg').dataset.style = 'wallpaper-empty'; });
   if (GL_STYLES.includes(style)) {
     if (!bgGl.set(style, { motion: settings.bgMotion, intensity: settings.bgIntensity })) style = 'fluid';   // no WebGL: fall back
   } else bgGl.set(null);
@@ -348,7 +436,7 @@ function onState(s) {
 
 function setArt(t) {
   const img = $('#art');
-  if (!t?.image) { img.removeAttribute('src'); $('#mini-art').removeAttribute('src'); currentArt = ''; artColors = null; applyColors(); applyBackground(); return; }
+  if (!t?.image) { img.removeAttribute('src'); $('#mini-art').removeAttribute('src'); currentArt = ''; artColors = null; artPalettes = null; applyColors(); applyBackground(); return; }
   img.style.opacity = 0;
   const loader = new Image();
   loader.crossOrigin = 'anonymous';
@@ -356,8 +444,11 @@ function setArt(t) {
     if (state.track?.id !== t.id) return;
     img.src = t.image; img.style.opacity = 1; $('#mini-art').src = t.image;
     artColors = t.demoColors ? { bg: t.demoColors, accent: t.demoColors[1] } : extractColors(loader);
+    artPalettes = null;
     currentArt = t.image;
     applyColors(); applyBackground();
+    // richer palettes arrive a moment later (node-vibrant)
+    if (!t.demoColors) vibrantPalettes(loader).then(p => { if (p && state.track?.id === t.id) { artPalettes = p; applyColors(); } });
   };
   loader.onerror = () => { img.src = t.image; img.style.opacity = 1; currentArt = t.image; applyBackground(); };
   loader.src = t.image;
@@ -368,7 +459,7 @@ function updateMini() {
   $('#mini-title').textContent = t?.name || 'Nothing playing';
   if (t?.artistList?.length) $('#mini-artist').innerHTML = t.artistList.map(a => a.id ? `<span class="link" data-artist="${esc(a.id)}">${esc(a.name)}</span>` : esc(a.name)).join(', ');
   else $('#mini-artist').textContent = t?.artist || '';
-  $('#mini').classList.toggle('show', !!t && currentView !== 'nowplaying');
+  $('#mini').classList.toggle('show', !!t && (currentView !== 'nowplaying' || settings.layout === 'zen'));
 }
 
 /* =====================================================================
@@ -594,7 +685,8 @@ function showView(name) {
 function moveTabThumb(animate) {
   const b = $('#tabbar button.active'), th = $('#tab-thumb');
   if (!b) return;
-  th.style.left = b.offsetLeft + 'px'; th.style.width = b.offsetWidth + 'px';
+  if (settings.tabbarPos === 'side') { th.style.left = ''; th.style.width = ''; th.style.top = b.offsetTop + 'px'; th.style.height = b.offsetHeight + 'px'; }
+  else { th.style.top = ''; th.style.height = ''; th.style.left = b.offsetLeft + 'px'; th.style.width = b.offsetWidth + 'px'; }
   if (animate) { th.classList.add('moving'); setTimeout(() => th.classList.remove('moving'), 220); }
 }
 $$('#tabbar button').forEach(b => b.onclick = () => { pages.resetStack(); showView(b.dataset.view); });
@@ -822,6 +914,13 @@ async function startSource(kind) {
   }
 }
 
+// Reveal the auto-hidden tab bar when the pointer gets near it
+window.addEventListener('pointermove', e => {
+  if (!settings.autoHideTabbar) return;
+  const near = settings.tabbarPos === 'bottom' ? e.clientY > innerHeight - 120 : settings.tabbarPos === 'top' ? e.clientY < 120 : e.clientX < 140;
+  document.body.classList.toggle('peek-tabbar', near || !!e.target.closest?.('#tabbar'));
+}, { passive: true });
+
 // Film grain texture, generated once
 function makeGrain() {
   const c = document.createElement('canvas'); c.width = c.height = 160;
@@ -888,6 +987,7 @@ async function boot() {
   media.setup({ getState: () => state, position, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click(), seek: ms => seekTo(ms) });
   $('#open-palette').onclick = () => palette.openPalette();
   makeGrain();
+  cssedit.setup({ store, toast });
   hydrateIcons();
   buildSettingsUI();
   applySettings();
@@ -919,4 +1019,4 @@ async function boot() {
 boot();
 
 // For automated tests
-window.__lumen = { pages, devices, home, palette, themes, bgGl, applyAll, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };
+window.__lumen = { pages, devices, home, palette, themes, bgGl, applyAll, wallpaper, particles, cssedit, get artPalettes() { return artPalettes; }, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };

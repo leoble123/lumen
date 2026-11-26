@@ -8,7 +8,7 @@ export const refractionSupported = (() => {
   return /Chrom|Edge|Brave|Opera/i.test(brands) || (/Chrome\//.test(navigator.userAgent) && !/Firefox/.test(navigator.userAgent));
 })();
 
-let svg, mode = 'liquid', strength = 0.6, nextId = 0;
+let svg, mode = 'liquid', strength = 0.6, nextId = 0, thickness = 1, fringe = 0.025;
 const els = new Map();          // element -> { id, filter, key }
 const mapCache = new Map();     // "w x h x r x bezel" -> data URL
 
@@ -66,9 +66,9 @@ function build(el) {
   const w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight);
   if (!w || !h || mode !== 'liquid' || !refractionSupported) { el.style.backdropFilter = ''; return; }
   const r = Math.round(radiusOf(el, w, h));
-  const bezel = Math.round(Math.min(Math.max(r * 0.9, 14), Math.min(w, h) / 2, 40));
+  const bezel = Math.round(Math.min(Math.max(r * 0.9 * thickness, 8), Math.min(w, h) / 2, 40 * thickness));
   const scale = (el.dataset.glassStrength ? Number(el.dataset.glassStrength) : 1) * strength * Math.min(70, 22 + bezel * 1.1);
-  const key = `${w}|${h}|${r}|${bezel}|${scale.toFixed(1)}`;
+  const key = `${w}|${h}|${r}|${bezel}|${scale.toFixed(1)}|${fringe}`;
   if (entry.key === key && entry.filter.isConnected) return applyStyle(el, entry);
   entry.key = key;
   const map = lensMap(w, h, r, bezel);
@@ -77,7 +77,7 @@ function build(el) {
   f.setAttribute('filterUnits', 'userSpaceOnUse');
   f.setAttribute('primitiveUnits', 'userSpaceOnUse');
   f.setAttribute('color-interpolation-filters', 'sRGB');
-  const ab = 0.025; // chromatic aberration amount
+  const ab = fringe; // chromatic aberration amount
   f.innerHTML = `
     <feImage href="${map}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/>
     <feDisplacementMap in="SourceGraphic" in2="map" scale="${scale * (1 + ab)}" xChannelSelector="R" yChannelSelector="G" result="dr"/>
@@ -117,8 +117,10 @@ export function attach(el) {
 
 export function attachAll(root = document) { root.querySelectorAll('.glass').forEach(attach); }
 
-export function configure(newMode, newStrength) {
+export function configure(newMode, newStrength, opts = {}) {
   mode = newMode; strength = newStrength;
+  if (opts.thickness != null) thickness = opts.thickness;
+  if (opts.fringe != null) fringe = opts.fringe;
   document.documentElement.dataset.glass = mode === 'liquid' && !refractionSupported ? 'frosted' : mode;
   els.forEach((_, el) => { els.get(el).key = ''; schedule(el); });
 }
