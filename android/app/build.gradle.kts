@@ -19,8 +19,8 @@ android {
         applicationId = "app.lumen.player"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -54,6 +54,9 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.webkit:webkit:1.13.0")
     implementation("androidx.browser:browser:1.8.0")
+    // Spotify App Remote SDK (Apache 2.0) — plays music on this phone through the Spotify app
+    implementation(files("libs/spotify-app-remote-release-0.8.0.aar"))
+    implementation("com.google.code.gson:gson:2.11.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")   // real org.json for JVM tests (Android's is a stub there)
 }

@@ -32,17 +32,18 @@ export async function refresh() {
   const lumenId = src.kind === 'app' ? src.deviceId : null;
   // "This computer" always appears so you can bring playback back into Lumen
   const others = devices.filter(d => d.id !== lumenId && d.name !== 'Lumen');
-  const lumenDev = devices.find(d => d.id === lumenId) || { id: '__lumen', name: 'Lumen (this computer)', type: 'Computer', is_active: false, supports_volume: true, volume_percent: null };
+  const phoneOk = ANDROID && typeof window.LumenAndroid?.phoneConnect === 'function';
+  const lumenDev = devices.find(d => d.id === lumenId) || { id: '__lumen', name: 'Lumen (this computer)', type: ANDROID ? 'Smartphone' : 'Computer', is_active: false, supports_volume: true, volume_percent: null };
   const row = (d, isLumen) => {
     const vol = d.supports_volume && d.volume_percent != null;
     return `<div class="device${d.is_active ? ' active' : ''}" data-id="${esc(d.id)}" data-lumen="${isLumen ? 1 : ''}">
       <span class="dev-ic">${icons[ICON[String(d.type).toLowerCase()]] || icons.speaker}</span>
-      <div class="dev-main"><div class="dev-name">${esc(isLumen ? 'Lumen (this computer)' : d.name)}</div>
+      <div class="dev-main"><div class="dev-name">${esc(isLumen ? (ANDROID ? 'This phone' : 'Lumen (this computer)') : d.name)}</div>
         <div class="dev-sub">${d.is_active ? '<span class="dev-live"><i></i><i></i><i></i></span>Playing here' : esc(d.type)}${d.is_restricted ? ' · can’t be controlled' : ''}</div>
         ${vol && d.is_active ? `<div class="dev-vol">${icons.volLow}<input type="range" min="0" max="100" value="${d.volume_percent}" data-vol="${esc(d.id)}">${icons.volHigh}</div>` : ''}
       </div></div>`;
   };
-  body.innerHTML = (ANDROID ? '' : `<div class="group-title">This computer</div><div class="group">${row(lumenDev, true)}</div>`) + `
+  body.innerHTML = (ANDROID && !phoneOk ? '' : `<div class="group-title">${ANDROID ? 'This phone' : 'This computer'}</div><div class="group">${row(lumenDev, true)}</div>`) + `
     <div class="group-title">${ANDROID ? 'Your devices' : 'Other devices'}</div>
     <div class="group">${others.length ? others.map(d => row(d, false)).join('') : '<p class="empty dev-empty">Open Spotify on your phone, speaker or TV and it will show up here.</p>'}</div>
     <p class="set-hint q-note">${ANDROID ? 'Lumen on Android shows and controls what Spotify is playing. Bluetooth speakers and headphones are chosen in the Spotify app or your phone\'s settings.' : 'To change which speakers or headphones your computer uses, pick them in your computer\'s sound settings — Lumen plays through whatever is selected there.'}</p>`;
@@ -67,7 +68,7 @@ async function transfer(el) {
   try {
     if (el.dataset.lumen) {
       if (src?.kind === 'app' && el.classList.contains('active')) return;
-      ctx.toast('Moving playback to Lumen…');
+      ctx.toast(ANDROID ? 'Moving playback to this phone…' : 'Moving playback to Lumen…');
       await ctx.switchMode('app', { resume: playing });
     } else {
       const d = devices.find(x => x.id === el.dataset.id);

@@ -1,7 +1,7 @@
 import { login, handleCallback, isLoggedIn, logout, store } from './auth.js';
 import { api } from './api.js';
 import { getLyrics, parseLRC, withGaps, timeWords } from './lyrics.js';
-import { sdkSource, remoteSource, demoSource } from './playback.js';
+import { sdkSource, remoteSource, demoSource, phoneSource } from './playback.js';
 import { icons, hydrateIcons } from './icons.js';
 import * as glass from './glass.js';
 import * as pages from './pages.js';
@@ -33,6 +33,8 @@ const SCHEMA = [
   { group: 'General', items: [
     { key: 'startView', type: 'seg', label: 'Open Lumen on', def: 'home', options: [['home', 'Home'], ['nowplaying', 'Now Playing']] },
     { key: 'appearance', type: 'seg', label: 'Appearance', def: 'dark', options: [['dark', 'Dark'], ['oled', 'OLED black'], ['light', 'Light']] },
+    { key: 'performance', type: 'seg', label: 'Effects', def: 'auto', options: [['auto', 'Auto'], ['full', 'Full'], ['smooth', 'Smooth']],
+      hint: 'Smooth turns off the heaviest effects (glass blur & refraction, grain, lyric blur) so phones stay fast. Auto uses Smooth on phones and tablets.' },
   ]},
   { group: 'Layout', items: [
     { key: 'layout', type: 'chips', label: 'Now Playing layout', def: 'classic', options: [['classic', 'Classic'], ['centered', 'Big art'], ['zen', 'Lyrics only'], ['compact', 'Compact']] },
@@ -45,7 +47,7 @@ const SCHEMA = [
     { key: 'showTopButtons', type: 'switch', label: 'Always show top buttons', def: true, hint: 'When off, they appear when you point at the top-right corner.' },
   ]},
   { group: 'Playback', items: [
-    { key: 'playbackMode', type: 'seg', label: 'Play audio in', def: ANDROID ? 'remote' : 'app', options: [['app', 'Lumen'], ['remote', 'Spotify app']], showIf: () => !ANDROID,
+    { key: 'playbackMode', type: 'seg', label: 'Play audio in', def: 'app', options: ANDROID ? [['app', 'This phone'], ['remote', 'Other devices']] : [['app', 'Lumen'], ['remote', 'Spotify app']],
       hint: '“Spotify app” lets the normal Spotify app (or your phone) play the music while Lumen shows lyrics & controls.' },
   ]},
   { group: 'Glass', items: [
@@ -150,8 +152,15 @@ function setBodyFlag(prefix, value) {
   document.body.className = [...keep, `${prefix}-${value}`].join(' ');
 }
 
+// Phones and tablets (touch screens, the Android app) get the lightweight look unless you pick Full
+const isMobileDevice = () => ANDROID || matchMedia('(hover: none) and (pointer: coarse)').matches;
+const smoothMode = () => settings.performance === 'smooth' || (settings.performance === 'auto' && isMobileDevice());
+
 function applySettings() {
   const r = document.documentElement.style;
+  const smooth = smoothMode();
+  document.body.classList.toggle('perf-smooth', smooth);
+  bgGl.setLite(smooth);
   r.setProperty('--lyric-size', settings.lyricSize + 'px');
   r.setProperty('--lyric-speed', settings.lyricSpeed);
   r.setProperty('--bg-blur', settings.bgBlur + 'px');
@@ -167,13 +176,13 @@ function applySettings() {
   for (const [k, v] of Object.entries(flags)) setBodyFlag(k, v);
   const toggles = { 'autohide-tabbar': settings.autoHideTabbar, 'hide-volume': !settings.showVolume, 'hide-times': !settings.showTimes, 'hide-device': !settings.showDeviceLabel, 'hide-topbtns': !settings.showTopButtons };
   for (const [c, on] of Object.entries(toggles)) document.body.classList.toggle(c, on);
-  particles.set(settings.particles, settings.particleAmount);
+  particles.set(settings.particles, smooth ? Math.min(settings.particleAmount, 30) : settings.particleAmount);
   r.setProperty('--lyric-glow', settings.lyricGlow / 100);
   r.setProperty('--lyric-ls', settings.letterSpacing);
   r.setProperty('--grain', settings.grain / 100);
   document.body.classList.toggle('align-center', settings.lyricAlign === 'center');
   setBodyFlag('lyric', settings.lyricStyle);
-  glass.configure(settings.glass, settings.refraction / 100, { thickness: settings.glassThickness, fringe: settings.glassFringe / 100 * 0.06 });
+  glass.configure(smooth ? 'none' : settings.glass, settings.refraction / 100, { thickness: settings.glassThickness, fringe: settings.glassFringe / 100 * 0.06 });
   applyColors();
   applyBackground();
   requestAnimationFrame(() => { layoutLyrics(); moveTabThumb(); updateMini(); });
@@ -387,7 +396,7 @@ const blobs = ['#blob1', '#blob2', '#blob3', '#blob4'].map(s => $(s));
 const BLOB_PATHS = [[0.13, 0.17, -0.18, -0.22, 0], [0.11, 0.09, 0.22, 0.2, 2], [0.07, 0.12, 0.05, -0.05, 4], [0.09, 0.06, -0.2, 0.25, 1]];
 let bgClock = 0, lastFrame = performance.now();
 function animateBg(dt) {
-  if (settings.bgStyle !== 'fluid') return;
+  if (settings.bgStyle !== 'fluid' || smoothMode()) return;   // moving giant blurred blobs is too heavy for phones
   bgClock += dt * settings.bgMotion * 0.001;
   blobs.forEach((b, i) => {
     const [fx, fy, ox, oy, ph] = BLOB_PATHS[i];
@@ -558,7 +567,7 @@ function positionLines(instant = false) {
     const delay = instant || manualOffset || minimal ? 0 : Math.min(Math.max(i - a + 1, 0), 9) * 50 / settings.lyricSpeed;
     el.style.transitionDelay = `${delay}ms`;
     el.style.transform = `translate3d(0, ${(base + tops[i] + manualOffset).toFixed(1)}px, 0) scale(${isActive || !synced || minimal ? 1 : 0.95})`;
-    el.style.filter = settings.blurInactive && !minimal && synced && !isActive && !manualOffset ? `blur(${(Math.min(dist, 5) * 0.75).toFixed(2)}px)` : 'none';
+    el.style.filter = settings.blurInactive && !minimal && !smoothMode() && synced && !isActive && !manualOffset ? `blur(${(Math.min(dist, 5) * 0.75).toFixed(2)}px)` : 'none';
     el.classList.toggle('active', isActive);
     el.classList.toggle('past', synced && i < activeIdx);
   });
@@ -620,6 +629,7 @@ function tickLyrics(pos) {
 /* =====================================================================
    RENDER LOOP
    ===================================================================== */
+let lastShownSec = -1;
 function frame(now) {
   const dt = Math.min(100, now - lastFrame); lastFrame = now;
   animateBg(dt);
@@ -627,8 +637,8 @@ function frame(now) {
   const pct = dur ? pos / dur : 0;
   $('#bar-fill').style.width = `${pct * 100}%`;
   $('#mini-bar').style.transform = `scaleX(${pct})`;
-  $('#t-cur').textContent = fmt(pos);
-  $('#t-left').textContent = '-' + fmt(dur - pos);
+  const sec = Math.floor(pos / 1000);
+  if (sec !== lastShownSec) { lastShownSec = sec; $('#t-cur').textContent = fmt(pos); $('#t-left').textContent = '-' + fmt(dur - pos); }
   tickLyrics(pos);
   requestAnimationFrame(frame);
 }
@@ -948,8 +958,14 @@ $('#update-later').onclick = () => { $('#update').classList.remove('show'); toas
 /* =====================================================================
    START-UP
    ===================================================================== */
+const phoneSupported = () => ANDROID && typeof window.LumenAndroid.phoneConnect === 'function';
+
 async function startSource(kind) {
-  if (ANDROID && kind === 'app') kind = 'remote';   // Spotify's web player doesn't run on phones
+  // On Android, "app" means this phone (Spotify App Remote). The 1.0 app can't do that yet: control instead.
+  if (ANDROID && kind === 'app' && !phoneSupported()) {
+    kind = 'remote';
+    setTimeout(() => toast('Update the Lumen app to play music on this phone (look for the Install button).'), 2500);
+  }
   source?.stop();
   source = null;
   currentTrackId = undefined;
@@ -961,6 +977,7 @@ async function startSource(kind) {
     if (type !== 'poll') toast(msg);
   };
   const s = kind === 'demo' ? demoSource({ onState })
+    : ANDROID && kind === 'app' ? phoneSource({ onState, onError, clientId: store.get('clientId'), deviceName: nativeInfo()?.deviceName || '', nativeCall })
     : kind === 'remote' ? remoteSource({ onState, onError })
     : sdkSource({ onState, onError, volume: volume / 100 });
   s.kind = kind;
@@ -968,7 +985,7 @@ async function startSource(kind) {
   try { await s.start(); }
   catch (e) {
     if (source !== s) return;
-    if (kind === 'app') { toast(`${e.message} — controlling the Spotify app instead.`); return startSource('remote'); }
+    if (kind === 'app') { toast(ANDROID ? `${e.message} For now, Lumen controls Spotify on your other devices.` : `${e.message} — controlling the Spotify app instead.`); return startSource('remote'); }
     toast(e.message);
   }
 }

@@ -736,3 +736,21 @@ body.android .overlay { padding-top: var(--safe-top, 0px); }
 }
 
 #lyrics-inner.dragging .line { transition: none !important; }   /* lyrics follow your finger exactly */
+
+/* ================= v0.9: Smooth mode (phones) =================
+   Live blur (backdrop-filter), refraction, full-screen grain and blurred/glowing text are what make phones drop frames.
+   Smooth mode swaps them for near-opaque glass and keeps every animation on cheap transforms. */
+body.perf-smooth .glass { backdrop-filter: none !important; background: rgba(36, 34, 44, .82); }
+body.perf-smooth .glass::before { display: none; }
+body.perf-smooth .sheet, body.perf-smooth .modal, body.perf-smooth .card, body.perf-smooth .pal-box,
+body.perf-smooth #menu, body.perf-smooth #toast { background: rgba(28, 27, 34, .96); }
+body.perf-smooth .player-panel { background: rgba(255, 255, 255, .08); }
+body.perf-smooth #grain { display: none; }
+body.perf-smooth .line.active .w.on, body.perf-smooth .line.active .fill { filter: none !important; }
+body.perf-smooth .lyrics-col { -webkit-mask-image: none; mask-image: none; }
+body.perf-smooth .blob { filter: blur(70px); }
+body.perf-smooth .art-wrap { box-shadow: 0 16px 40px -12px rgba(0,0,0,.6); }
+body.perf-smooth.appearance-light .glass { background: rgba(250, 250, 252, .9); }
+body.perf-smooth.appearance-light .sheet, body.perf-smooth.appearance-light .modal, body.perf-smooth.appearance-light .card,
+body.perf-smooth.appearance-light .pal-box, body.perf-smooth.appearance-light #menu, body.perf-smooth.appearance-light #toast { background: rgba(248, 248, 250, .97); }
+body.perf-smooth.appearance-oled .glass { background: rgba(22, 22, 24, .9); }

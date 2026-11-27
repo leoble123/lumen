@@ -156,3 +156,61 @@ export function demoSource({ onState }) {
     stop: () => clearInterval(timer),
   };
 }
+
+/* 4) Android: play on THIS phone through the Spotify app (Spotify App Remote, via the Lumen app).
+      Live player updates come straight from Spotify — no polling. Bigger requests (play this album
+      from song 5, play a list of songs) go through the Web API, aimed at this phone's Spotify. */
+export function phoneSource({ onState, onError, clientId, deviceName, nativeCall }) {
+  let deviceId = null, last = null, stopped = false;
+  const imageUrl = raw => raw && raw.startsWith('spotify:image:') ? `https://i.scdn.co/image/${raw.split(':').pop()}` : '';
+  window.__lumenNative.playerState = json => {
+    if (stopped) return;
+    let s; try { s = JSON.parse(json); } catch { return; }
+    const t = s.track;
+    last = {
+      track: t && t.uri ? {
+        id: idFromUri(t.uri), uri: t.uri, name: t.name,
+        artist: (t.artists || []).map(a => a.name).join(', '),
+        artistList: (t.artists || []).map(a => ({ id: idFromUri(a.uri), name: a.name })),
+        album: t.album?.name || '', albumId: idFromUri(t.album?.uri), image: imageUrl(t.image), durationMs: t.duration,
+      } : null,
+      positionMs: s.position, paused: s.paused, at: performance.now(), shuffle: s.shuffle, repeat: s.repeat, deviceName: 'this phone',
+    };
+    onState(last);
+  };
+  const cmd = (c, arg = '') => nativeCall('phoneCommand', c, String(arg));
+  // This phone as Spotify sees it (for Web API requests)
+  async function findDevice() {
+    const r = await api('/me/player/devices').catch(() => null);
+    const list = r?.devices || [];
+    const mine = list.find(d => d.name === deviceName) || list.find(d => d.is_active && /smartphone|tablet/i.test(d.type)) || list.find(d => /smartphone|tablet/i.test(d.type));
+    deviceId = mine?.id || null;
+    return deviceId;
+  }
+  return {
+    name: 'Playing on this phone',
+    get deviceId() { return deviceId; },
+    async start() {
+      await nativeCall('phoneConnect', clientId);
+      await findDevice();
+    },
+    toggle: () => cmd(last && !last.paused ? 'pause' : 'resume'),
+    next: () => cmd('next'),
+    prev: () => cmd('prev'),
+    seek: ms => cmd('seek', Math.max(0, Math.round(ms))),
+    shuffle: on => cmd('shuffle', !!on),
+    repeat: mode => cmd('repeat', mode),
+    setVolume: v => { window.LumenAndroid.setVolume(v); },
+    async play(body) {
+      // simple cases go straight to the Spotify app (instant, and wakes it up if needed)
+      if (body.context_uri && !body.offset) return cmd('play', body.context_uri);
+      if (body.uris?.length === 1) return cmd('play', body.uris[0]);
+      if (!deviceId) await findDevice();
+      if (!deviceId) { await cmd('resume').catch(() => {}); await new Promise(r => setTimeout(r, 1200)); await findDevice(); }
+      if (deviceId) return api('/me/player/play', { method: 'PUT', query: { device_id: deviceId }, body });
+      // last resort: start the album/playlist, or the first song
+      return cmd('play', body.context_uri || body.uris[0]);
+    },
+    stop: () => { stopped = true; },
+  };
+}

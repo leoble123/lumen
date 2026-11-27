@@ -89,7 +89,7 @@ const FRAG = {
 export const STYLES = Object.keys(FRAG);
 
 let canvas, gl, buf, programs = {}, current = null, raf = 0, clock = 0, last = 0;
-let speed = 1, amount = 0.5, scale = 0.5;
+let speed = 1, amount = 0.5, scale = 0.5, lite = false, lastDraw = 0;
 let colors = [[0.3, 0.1, 0.5], [0.8, 0.3, 0.4], [0.9, 0.6, 0.4], [0.1, 0.15, 0.4]], target = colors.map(c => c.slice());
 
 function compile(type, src) {
@@ -128,7 +128,10 @@ function resize() {
 function draw(now) {
   raf = 0;
   if (!current || !gl) return;
-  const dt = Math.min(100, now - (last || now)); last = now;
+  // Smooth mode (phones): a quarter-resolution picture redrawn ~24 times a second is plenty for a soft gradient
+  if (lite && now - lastDraw < 41) { raf = requestAnimationFrame(draw); return; }
+  lastDraw = now;
+  const dt = Math.min(150, now - (last || now)); last = now;
   if (!document.hidden) {
     clock += dt * 0.001 * speed;
     colors = colors.map((c, i) => c.map((v, k) => v + (target[i][k] - v) * Math.min(1, dt / 600)));
@@ -151,7 +154,7 @@ function draw(now) {
 /** Show a style ('mesh', 'aurora', …) or pass null to stop. Returns false if WebGL isn't available. */
 export function set(style, { motion = 1, intensity = 50 } = {}) {
   speed = motion; amount = intensity / 100;
-  scale = style === 'stars' ? 0.75 : 0.5;
+  scale = lite ? (style === 'stars' ? 0.5 : 0.22) : (style === 'stars' ? 0.75 : 0.5);
   if (!style) { current = null; if (canvas) canvas.style.opacity = 0; return true; }
   if (!init()) return false;
   try { program(style); } catch (e) { console.warn('Background shader failed:', e); return false; }
@@ -168,3 +171,4 @@ export function setColors(hexes) {
   target = [0, 1, 2, 3].map(i => hexToRgb(list[i] || list[i % list.length]));   // always 4 colors
 }
 export const isRunning = () => !!current;
+export function setLite(on) { lite = !!on; }

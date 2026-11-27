@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private lateinit var updater: WebUpdater
     private lateinit var apk: ApkUpdater
+    private lateinit var phone: PhonePlayer
     private val io = Executors.newSingleThreadExecutor()
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var insetsJs = ""
@@ -56,6 +57,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         updater = WebUpdater(filesDir, { path -> try { assets.open("web/$path") } catch (e: Exception) { null } })
         apk = ApkUpdater(this)
+        phone = PhonePlayer(this) { json ->
+            runOnUiThread { if (::web.isInitialized) web.evaluateJavascript("window.__lumenNative && window.__lumenNative.playerState && window.__lumenNative.playerState(${JSONObject.quote(json)})", null) }
+        }
         updater.prepareLaunch()
 
         // Lumen's files are served from a private https origin inside the app (needed for module scripts & storage)
@@ -147,6 +151,9 @@ class MainActivity : ComponentActivity() {
         else loadFor(intent)
     }
 
+    override fun onStart() { super.onStart(); phone.reconnectIfNeeded() }
+    override fun onDestroy() { phone.disconnect(); super.onDestroy() }
+
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         web.saveState(outState)
@@ -188,6 +195,9 @@ class MainActivity : ComponentActivity() {
             .put("versionCode", BuildConfig.VERSION_CODE)
             .put("webVersion", updater.currentVersion())
             .put("rolledBack", updater.rolledBack ?: "")
+            .put("deviceName", phone.deviceName)
+            .put("volume", phone.volume())
+            .put("appRemote", true)
             .toString()
 
         @JavascriptInterface fun openAuth(url: String) {
@@ -199,6 +209,15 @@ class MainActivity : ComponentActivity() {
             if (!url.startsWith("https://") && !url.startsWith("http://")) return
             runOnUiThread { this@MainActivity.openExternal(url) }
         }
+
+        // ---- playing on this phone (Spotify App Remote) ----
+        @JavascriptInterface fun phoneConnect(id: Int, clientId: String) {
+            runOnUiThread { phone.connect(clientId) { err -> reply(id, if (err == null) JSONObject().put("ok", true) else JSONObject().put("error", err)) } }
+        }
+        @JavascriptInterface fun phoneCommand(id: Int, cmd: String, arg: String) {
+            runOnUiThread { phone.command(cmd, arg) { err -> reply(id, if (err == null) JSONObject().put("ok", true) else JSONObject().put("error", err)) } }
+        }
+        @JavascriptInterface fun setVolume(v: Double) { runOnUiThread { phone.setVolume(v) } }
 
         @JavascriptInterface fun markHealthy() { io.execute { updater.markHealthy() } }
 

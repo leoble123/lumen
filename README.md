@@ -20,22 +20,30 @@ Lumen doesn't modify the Spotify app, so Spotify updates can't break it.
    You need Spotify Premium to play music. Spotify requires it for all developer apps.
 
 ## Android app
-Install **`android/releases/lumen-1.0.0.apk`** on your phone or tablet (allow "install unknown apps" for your browser
-or file manager when asked).
+Install the newest APK from **`android/releases/`** (allow "install unknown apps" when asked). Already have Lumen?
+It offers the update itself: tap **Install** in the bubble.
 
-1. In the Spotify Developer Dashboard, open your Lumen app → **Edit settings** → add the Redirect URI
-   **`lumen://callback`** (keep the `http://127.0.0.1:8888/callback` one for your computer) → Save.
-2. Open Lumen, paste your Client ID, and log in. Spotify's login opens in a secure Chrome tab, so Google sign-in works.
+One-time Spotify setup, in the Spotify Developer Dashboard → your Lumen app → **Edit settings**:
+1. Add the Redirect URI **`lumen://callback`** (keep the `http://127.0.0.1:8888/callback` one for your computer).
+2. Under **Android packages**, add package name **`app.lumen.player`** with SHA-1 fingerprint
+   **`E3:3B:45:12:CE:15:2F:C0:1C:45:7B:24:02:66:71:69:39:18:D1:DC`**. This lets Lumen play through the Spotify app on your phone.
+3. Save.
 
-On Android, Lumen shows and controls what the **Spotify app** plays. Spotify doesn't allow its web player on phones,
-so Lumen can't play the audio itself there. Everything else works: lyrics, pages, queue, devices, playlist editing,
-themes. On phones, tap the 💬 button in Now Playing for full-screen lyrics. The back button closes panels, then goes back.
+**Playing on your phone:** Lumen plays through the Spotify app (Spotify's official App Remote SDK), so music comes out of
+your phone, keeps playing in the background, and shows Spotify's usual notification and lock-screen controls.
+The Spotify app must be installed and logged in. The first time, Spotify asks you to allow Lumen.
+In Customize → Playback (or the Devices panel) you can switch to controlling your other devices instead.
+
+**Smooth mode:** on phones and tablets Lumen automatically uses lighter effects (Customize → General → Effects: Auto).
+In testing on a phone-speed CPU it ran at 60 fps instead of 13 with full effects. Pick **Full** if your device handles it.
+
+On phones, tap the 💬 button in Now Playing for full-screen lyrics. The back button closes panels, then goes back.
 
 **Updates:** Lumen inside the app updates itself over the air from this repo (same fingerprint checks and automatic
 rollback as on the computer). The rare update to the app itself shows an **Install** button in Lumen.
 
 Building the APK yourself: `android/build.sh` (needs the Android SDK, JDK 17+, and the signing key in
-`android/keystore.properties`, which is never committed).
+`android/keystore.properties`, which is never committed). The Spotify App Remote SDK (Apache 2.0) is in `android/app/libs/`.
 
 ## Updates (automatic)
 Lumen updates itself over the air. When it opens (and every few hours) it checks
