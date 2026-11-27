@@ -15,7 +15,12 @@ import * as wallpaper from './wallpaper.js';
 import * as particles from './particles.js';
 import * as fonts from './fonts.js';
 import * as cssedit from './cssedit.js';
-import { ANDROID, call as nativeCall, info as nativeInfo } from './platform.js';
+import { ANDROID, call as nativeCall, info as nativeInfo, openExternal } from './platform.js';
+import * as sleep from './sleep.js';
+import * as stats from './stats.js';
+import * as pip from './pip.js';
+import * as info from './info.js';
+import { extraLines, canRomanize, LANGS, defaultLang } from './lyrics-extra.js';
 if (ANDROID) document.body.classList.add('android');
 import { missingScopes } from './auth.js';
 window.__lumenGlass = glass;
@@ -85,6 +90,7 @@ const SCHEMA = [
 
     { key: 'blurInactive', type: 'switch', label: 'Blur other lines', def: true, showIf: s => s.lyricStyle === 'apple' || s.lyricStyle === 'karaoke' },
     { key: 'showGaps', type: 'switch', label: 'Dots during instrumentals', def: true },
+    { key: 'translateTo', type: 'select', label: 'Translate lyrics to', def: defaultLang(), options: LANGS },
   ]},
   { group: 'Fonts', items: [
     { key: 'font', type: 'select', label: 'Lyrics font', def: 'system', options: fonts.OPTIONS },
@@ -418,6 +424,7 @@ const position = () => state.paused ? state.positionMs : Math.min(state.position
 const fmt = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 function onState(s) {
+  stats.onState(s);
   if (seekingUntil > performance.now()) { s = { ...s, positionMs: state.positionMs, at: state.at, paused: s.paused }; }
   state = s;
   const t = s.track;
@@ -441,6 +448,8 @@ function onState(s) {
   else $('#artist').textContent = t ? t.artist : (source?.kind === 'remote' ? 'Play something in Spotify on any device' : 'Pick something from Library or Search');
   pages.onTrackChange(t);
   media.update();
+  sleep.onTrackChange(t?.id);
+  if (t && t.id !== 'demo') store.set('lastTrack', { id: t.id, uri: t.uri, name: t.name, artist: t.artist, artistList: t.artistList, album: t.album, albumId: t.albumId, image: t.image, durationMs: t.durationMs });
   setArt(t);
   loadLyrics(t);
 }
@@ -482,6 +491,8 @@ let manualOffset = 0, manualTimer = null;
 
 function lyricsMessage(title, sub = '') {
   lines = []; lineEls = []; activeIdx = -1; synced = false;
+  document.body.classList.remove('has-lyrics');
+  sendNativeLyrics();
   inner.innerHTML = title ? `<div class="lyrics-msg">${esc(title)}${sub ? `<small>${esc(sub)}</small>` : ''}</div>` : '';
 }
 
@@ -526,8 +537,72 @@ function renderLyrics() {
     return el;
   });
   activeIdx = -2; manualOffset = 0;
+  document.body.classList.toggle('has-lyrics', lines.some(l => l.text));
   layoutLyrics();
+  applyLyricsExtra();
 }
+
+/* ---- translation / romanization under each line ---- */
+let lyricsExtra = store.get('lyricsExtra') || 'off';
+async function applyLyricsExtra() {
+  const t = lyricsTrack, myLines = lines;
+  lineEls.forEach(el => el.querySelector('.sub')?.remove());
+  $('#btn-lyx').classList.toggle('on', lyricsExtra !== 'off');
+  const textLines = myLines.filter(l => !l.gap);
+  if (lyricsExtra === 'off' || !t || !textLines.length || (lyricsExtra === 'romanize' && !canRomanize(textLines))) { layoutLyrics(); sendNativeLyrics(); return; }
+  try {
+    const subs = await extraLines(t.id, textLines, lyricsExtra, settings.translateTo);
+    if (lyricsTrack !== t || lines !== myLines) return;
+    let k = 0;
+    myLines.forEach((l, i) => {
+      if (l.gap) return;
+      const txt = subs[k++];
+      l.sub = txt || '';
+      if (txt) { const d = document.createElement('span'); d.className = 'sub'; d.textContent = txt; lineEls[i].appendChild(d); }
+    });
+    layoutLyrics();
+  } catch { toast('Couldn’t reach the translator — try again in a bit.'); }
+  sendNativeLyrics();
+}
+function lyricsMenu(anchor) {
+  const textLines = lines.filter(l => !l.gap);
+  const lang = (LANGS.find(l => l[0] === settings.translateTo) || ['', 'English'])[1];
+  const pick = m => () => { lyricsExtra = m; store.set('lyricsExtra', m); applyLyricsExtra(); };
+  pages.openMenu(anchor, [
+    { label: 'Original lyrics', icon: lyricsExtra === 'off' ? 'check' : '', action: pick('off') },
+    canRomanize(textLines) && { label: 'Show pronunciation (romanized)', icon: lyricsExtra === 'romanize' ? 'check' : 'translate', action: pick('romanize') },
+    { label: `Translate to ${lang}`, icon: lyricsExtra === 'translate' ? 'check' : 'translate', action: pick('translate') },
+    '-',
+    { label: 'Change translation language…', icon: 'sliders', action: languagePicker },
+    ANDROID && typeof window.LumenAndroid?.setFloatingLyrics === 'function' && '-',
+    ANDROID && typeof window.LumenAndroid?.setFloatingLyrics === 'function' && { label: floatingOn ? 'Turn off floating lyrics' : 'Float lyrics over other apps', icon: 'popout', action: toggleFloating },
+  ]);
+}
+function languagePicker() {
+  pages.openModal(`<h3>Translate lyrics to</h3><div class="picker">${LANGS.map(([v, l]) => `<button class="pick" data-v="${v}"><span>${l}</span>${v === settings.translateTo ? icons.check : ''}</button>`).join('')}</div>`, m => {
+    m.querySelectorAll('.pick').forEach(b => b.onclick = () => { pages.closeModal(); setSetting('translateTo', b.dataset.v); lyricsExtra = 'translate'; store.set('lyricsExtra', 'translate'); applyLyricsExtra(); });
+  });
+}
+$('#btn-lyx').onclick = e => lyricsMenu(e.currentTarget);
+
+/* ---- floating lyrics (Android app 1.2+) ---- */
+let floatingOn = ANDROID ? !!nativeInfo()?.floating : false;
+window.__lumenNative.floatingChanged = on => { floatingOn = on; toast(on ? 'Floating lyrics on — they show over other apps while music plays' : 'Floating lyrics off'); sendNativeLyrics(); };
+async function toggleFloating() {
+  try {
+    const r = await nativeCall('setFloatingLyrics', !floatingOn);
+    if (r.needsPermission) { toast('Allow “Display over other apps” for Lumen, then come back and try again.'); return; }
+    floatingOn = !!r.on; store.set('floatingLyrics', floatingOn);
+    toast(floatingOn ? 'Floating lyrics on — they show over other apps while music plays' : 'Floating lyrics off');
+    sendNativeLyrics();
+  } catch (e) { toast(e.message); }
+}
+function sendNativeLyrics() {
+  if (!ANDROID || typeof window.LumenAndroid?.setLyrics !== 'function') return;
+  const data = synced ? lines.map(l => ({ t: Math.round(l.time), x: l.gap ? '♪' : l.text, s: l.sub || '' })) : [];
+  window.LumenAndroid.setLyrics(lyricsTrack?.uri || '', JSON.stringify(data));
+}
+const currentLine = () => (synced && lines[activeIdx] && !lines[activeIdx].gap ? lines[activeIdx].text : '');
 
 function layoutLyrics() {
   if (!lineEls.length) return;
@@ -640,6 +715,7 @@ function frame(now) {
   const sec = Math.floor(pos / 1000);
   if (sec !== lastShownSec) { lastShownSec = sec; $('#t-cur').textContent = fmt(pos); $('#t-left').textContent = '-' + fmt(dur - pos); }
   tickLyrics(pos);
+  if (pip.isOpen()) pip.update(state, currentLine());
   requestAnimationFrame(frame);
 }
 
@@ -670,6 +746,11 @@ $('#open-devices').onclick = () => devices.toggle();
 $('#close-devices').onclick = () => devices.close();
 $('#device-label').onclick = () => devices.open();
 $('#open-queue').onclick = () => pages.toggleQueue();
+$('#btn-sleep').onclick = e => sleep.menu(e.currentTarget);
+$('#sleep-chip').onclick = e => sleep.menu(e.currentTarget);
+$('#btn-pip').onclick = () => pip.open();
+// any button with data-href opens that page outside Lumen
+document.addEventListener('click', e => { const b = e.target.closest('[data-href]'); if (b) { e.preventDefault(); openExternal(b.dataset.href); } });
 $('#btn-lyrics').onclick = () => { document.body.classList.toggle('np-lyrics'); $('#btn-lyrics').classList.toggle('on', document.body.classList.contains('np-lyrics')); requestAnimationFrame(layoutLyrics); };
 $('#close-queue').onclick = () => pages.closeQueue();
 $('#btn-like').onclick = () => pages.toggleNowPlayingLike();
@@ -682,7 +763,8 @@ $('#vol').oninput = e => {
 };
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); palette.isOpen() ? palette.close() : palette.openPalette(); return; }
-  if (e.target.matches('input, select, textarea')) return;
+  if (e.target.matches('input, select, textarea') || e.target.closest?.('.CodeMirror')) return;
+  if (e.key === '?') { e.preventDefault(); return shortcutsSheet(); }
   if (e.code === 'Space') { e.preventDefault(); $('#btn-play').click(); }
   else if (e.code === 'ArrowRight') { e.preventDefault(); e.shiftKey ? $('#btn-next').click() : seekTo(position() + 5000); }
   else if (e.code === 'ArrowLeft') { e.preventDefault(); e.shiftKey ? $('#btn-prev').click() : seekTo(position() - 5000); }
@@ -705,7 +787,7 @@ function showView(name) {
   moveTabThumb(true);
   updateMini();
   if (name === 'library') loadLibrary();
-  if (name === 'home') home.load();
+  if (name === 'home') { home.load(); renderStats(); }
   if (name === 'search') setTimeout(() => $('#search-input').focus(), 80);
 }
 function moveTabThumb(animate) {
@@ -1044,6 +1126,15 @@ function paletteCommands() {
     { group: 'Playback', title: 'Like / unlike this song', icon: 'heart', keywords: 'save favorite', run: () => pages.toggleNowPlayingLike() },
     { group: 'Playback', title: 'Show queue', icon: 'queue', run: () => pages.openQueue() },
     { group: 'Playback', title: 'Devices', icon: 'devices', keywords: 'speaker phone transfer output', run: () => devices.open() },
+    ...[15, 30, 60].map(m => ({ group: 'Playback', title: `Sleep timer: ${m} minutes`, icon: 'moon', run: () => sleep.set(m) })),
+    { group: 'Playback', title: 'Sleep timer: end of this song', icon: 'moon', run: () => sleep.set('song') },
+    sleep.active() && { group: 'Playback', title: 'Turn off sleep timer', icon: 'moon', run: () => sleep.set(0) },
+    state.track && state.track.id !== 'demo' && { group: 'Playback', title: 'Song info & credits', icon: 'info', run: () => songInfo(currentTrackForInfo()) },
+    pip.supported() && !ANDROID && { group: 'App', title: 'Floating mini player', icon: 'popout', keywords: 'picture in picture pip always on top', run: () => pip.open() },
+    { group: 'Lyrics', title: 'Lyrics: translate', icon: 'translate', run: () => { lyricsExtra = 'translate'; store.set('lyricsExtra', 'translate'); applyLyricsExtra(); } },
+    { group: 'Lyrics', title: 'Lyrics: show pronunciation (romanized)', icon: 'translate', run: () => { lyricsExtra = 'romanize'; store.set('lyricsExtra', 'romanize'); applyLyricsExtra(); } },
+    { group: 'Lyrics', title: 'Lyrics: original only', icon: 'translate', run: () => { lyricsExtra = 'off'; store.set('lyricsExtra', 'off'); applyLyricsExtra(); } },
+    !ANDROID && { group: 'App', title: 'Keyboard shortcuts', icon: 'keyboard', hint: '?', run: shortcutsSheet },
     { group: 'App', title: 'Customize', icon: 'sliders', keywords: 'settings preferences', hint: 'Ctrl ,', run: () => openSettings() },
     { group: 'App', title: 'New playlist', icon: 'plus', run: () => pages.createPlaylist().then(pl => pl && pages.openPage('playlist', pl.id)) },
     { group: 'App', title: 'Check for updates', icon: 'download', run: () => checkUpdates(true) },
@@ -1054,7 +1145,50 @@ function paletteCommands() {
     if (item.options) for (const [v, label] of item.options) cmds.push({ group: 'Settings', title: `${g.group === 'General' ? '' : g.group + ' '}${item.label.toLowerCase() === 'style' ? 'style' : item.label}: ${label}`.trim(), icon: 'sliders', hint: settings[item.key] === v ? 'current' : '', run: () => setSetting(item.key, v) });
     if (item.type === 'switch') cmds.push({ group: 'Settings', title: `${settings[item.key] ? 'Turn off' : 'Turn on'}: ${item.label}`, icon: 'sliders', run: () => setSetting(item.key, !settings[item.key]) });
   }
-  return cmds;
+  return cmds.filter(Boolean);
+}
+
+// Song info & credits (from the ••• menu, the palette, or the queue)
+function currentTrackForInfo() {
+  const t = state.track;
+  return { id: t.id, uri: t.uri, name: t.name, durationMs: t.durationMs, image: t.image, album: { name: t.album, id: t.albumId }, artists: t.artistList || [{ name: t.artist }] };
+}
+async function songInfo(track) {
+  pages.openModal(`<div id="si">${info.songInfoHtml(track, null)}${info.loadingHtml}</div>`);
+  try {
+    const c = await info.songCredits(track);
+    const el = document.querySelector('.modal:not(.closing) #si');
+    if (el) el.innerHTML = info.songInfoHtml(track, c);
+  } catch {
+    const el = document.querySelector('.modal:not(.closing) #si .si-loading');
+    if (el) el.innerHTML = '<span>Couldn’t reach MusicBrainz right now.</span>';
+  }
+}
+
+function shortcutsSheet() {
+  if (matchMedia('(hover: none)').matches) return;
+  const k = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
+  pages.openModal(`<h3>Keyboard shortcuts</h3><div class="keys">
+    <kbd>Space</kbd><span>Play / pause</span><kbd>← →</kbd><span>Back / forward 5 seconds</span>
+    <kbd>Shift ← →</kbd><span>Previous / next song</span><kbd>${k} K</kbd><span>Command palette</span>
+    <kbd>${k} F</kbd><span>Search</span><kbd>${k} ,</kbd><span>Customize</span>
+    <kbd>Esc</kbd><span>Close panels</span><kbd>?</kbd><span>This list</span></div>`);
+}
+
+// Listening stats at the bottom of Home (only once there's something to show)
+async function renderStats() {
+  const box = $('#home-stats');
+  const s = await stats.summary();
+  if (s.total < 5 * 60000) { box.innerHTML = ''; return; }
+  const min = ms => Math.round(ms / 60000).toLocaleString();
+  const songs = s.topTracks.map(t => ({ uri: t.uri, id: t.uri.split(':').pop(), name: t.n, type: 'track', artists: [{ id: t.aid, name: t.a }], album: t.album ? { id: t.album.split(':').pop(), uri: t.album, name: '', image: t.img } : null, durationMs: 0, image: t.img }));
+  box.innerHTML = `<section class="home-sec"><div class="section-title">Your listening</div>
+    <div class="stat-chips"><div class="stat-chip"><b>${min(s.today)}</b><span>minutes today</span></div>
+      <div class="stat-chip"><b>${min(s.week)}</b><span>minutes this week</span></div>
+      <div class="stat-chip"><b>${s.streak}</b><span>day streak</span></div></div>
+    ${s.topArtists.length ? `<div class="row-scroll">${s.topArtists.filter(a => a.id).map(a => `<div class="tile round" data-kind="artist" data-id="${esc(a.id)}" data-uri="spotify:artist:${esc(a.id)}"><div class="cover"><img src="${esc(a.img || '')}" loading="lazy" alt=""></div><div class="t">${esc(a.name)}</div><div class="s">${min(a.ms)} min</div></div>`).join('')}</div>` : ''}
+    <div id="stats-songs"></div></section>`;
+  if (songs.length) pages.renderList($('#stats-songs'), { kind: 'stats', tracks: songs, playAt: i => play({ uris: [...songs.slice(i), ...songs.slice(0, i)].map(t => t.uri) }) });
 }
 
 function needReconnect() { if (isLoggedIn()) $('#reconnect').classList.add('show'); }
@@ -1063,7 +1197,7 @@ $('#reconnect-close').onclick = () => $('#reconnect').classList.remove('show');
 
 async function boot() {
   pages.setup({
-    toast, play, showView, needReconnect,
+    toast, play, showView, needReconnect, songInfo,
     getState: () => state, getSource: () => source,
     currentView: () => currentView, detailFrom: () => detailFrom, setDetailFrom: v => { if (v !== 'detail') detailFrom = v; },
     refreshLibrary: () => { libState = 'idle'; if (currentView === 'library') loadLibrary(true); },
@@ -1074,6 +1208,10 @@ async function boot() {
   themes.setup({ settings, ITEMS, validate, applyAll, toast, store });
   media.setup({ disabled: ANDROID, getState: () => state, position, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click(), seek: ms => seekTo(ms) });
   $('#open-palette').onclick = () => palette.openPalette();
+  sleep.setup({ getState: () => state, toast, openMenu: pages.openMenu, pause: () => source && !state.paused && run(() => source.toggle()),
+    onChange: () => { $('#sleep-chip').hidden = !sleep.active(); $('#sleep-chip b').textContent = sleep.label(); $('#btn-sleep').classList.toggle('on', sleep.active()); } });
+  pip.setup({ getState: () => state, currentLine, toast, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click() });
+  if (!pip.supported()) $('#btn-pip').classList.add('unsupported');
   makeGrain();
   cssedit.setup({ store, toast });
   hydrateIcons();
@@ -1102,6 +1240,8 @@ async function boot() {
   catch (e) { $('#login-error').textContent = e.message; }
 
   syncSettingsUI();
+  const lastTrack = store.get('lastTrack');
+  if (isLoggedIn() && lastTrack?.id && !state.track) onState({ track: lastTrack, positionMs: 0, paused: true, at: performance.now() });
   if (isLoggedIn()) { startSource(settings.playbackMode); if (missingScopes().length) needReconnect(); showView(settings.startView); }
   else showWelcome(true);
   setupUpdates().catch(() => {});
@@ -1109,4 +1249,4 @@ async function boot() {
 boot();
 
 // For automated tests
-window.__lumen = { ANDROID, pages, devices, home, palette, themes, bgGl, applyAll, wallpaper, particles, cssedit, get artPalettes() { return artPalettes; }, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };
+window.__lumen = { ANDROID, sleep, stats, pip, info, songInfo, get lyricsLines() { return lines; }, pages, devices, home, palette, themes, bgGl, applyAll, wallpaper, particles, cssedit, get artPalettes() { return artPalettes; }, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };

@@ -21,6 +21,7 @@ import org.json.JSONObject
  * Spotify keeps playing in the background with its own notification; Lumen gets live player updates.
  */
 class PhonePlayer(private val context: Context, private val push: (String) -> Unit) {
+    private val prefs = context.getSharedPreferences("lumen", Context.MODE_PRIVATE)
     private var remote: SpotifyAppRemote? = null
     private var clientId: String? = null
     private var connecting = false
@@ -33,15 +34,17 @@ class PhonePlayer(private val context: Context, private val push: (String) -> Un
     fun isConnected() = remote?.isConnected == true
 
     /** Connects to the Spotify app; calls back with null on success, or a message explaining what's wrong. */
-    fun connect(id: String, done: (String?) -> Unit) {
+    /** @param interactive true when the Lumen screen is open (Spotify may show its "allow" screen) */
+    fun connect(id: String, interactive: Boolean = true, done: (String?) -> Unit) {
         clientId = id
+        prefs.edit().putString("clientId", id).apply()
         if (isConnected()) { done(null); return }
         waiting += done
         if (connecting) return
         connecting = true
         val params = ConnectionParams.Builder(id)
             .setRedirectUri("lumen://callback")
-            .showAuthView(true)            // the first time, Spotify asks you to allow Lumen
+            .showAuthView(interactive)     // the first time, Spotify asks you to allow Lumen
             .build()
         SpotifyAppRemote.connect(context, params, object : Connector.ConnectionListener {
             override fun onConnected(r: SpotifyAppRemote) {
@@ -59,7 +62,7 @@ class PhonePlayer(private val context: Context, private val push: (String) -> Un
         list.forEach { it(err) }
     }
 
-    fun reconnectIfNeeded() { clientId?.let { if (!isConnected()) connect(it) { } } }
+    fun reconnectIfNeeded() { (clientId ?: prefs.getString("clientId", null))?.let { if (!isConnected()) connect(it, true) { } } }
 
     fun disconnect() { remote?.let { SpotifyAppRemote.disconnect(it) }; remote = null }
 
@@ -73,9 +76,9 @@ class PhonePlayer(private val context: Context, private val push: (String) -> Un
     }
 
     /** Runs a player command (connecting first if needed); done(null) = ok, else an error message. */
-    fun command(cmd: String, arg: String, done: (String?) -> Unit) {
-        val id = clientId ?: return done("Not connected to Spotify yet.")
-        connect(id) { err ->
+    fun command(cmd: String, arg: String, interactive: Boolean = true, done: (String?) -> Unit) {
+        val id = clientId ?: prefs.getString("clientId", null) ?: return done("Open Lumen and log in first.")
+        connect(id, interactive) { err ->
             if (err != null) return@connect done(err)
             val p = remote!!.playerApi
             val call = when (cmd) {

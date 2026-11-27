@@ -41,7 +41,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private lateinit var updater: WebUpdater
     private lateinit var apk: ApkUpdater
-    private lateinit var phone: PhonePlayer
+    private val core get() = LumenApp.core
+    private val phone get() = core.phone
     private val io = Executors.newSingleThreadExecutor()
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var insetsJs = ""
@@ -57,7 +58,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         updater = WebUpdater(filesDir, { path -> try { assets.open("web/$path") } catch (e: Exception) { null } })
         apk = ApkUpdater(this)
-        phone = PhonePlayer(this) { json ->
+        core.webPush = { json ->
             runOnUiThread { if (::web.isInitialized) web.evaluateJavascript("window.__lumenNative && window.__lumenNative.playerState && window.__lumenNative.playerState(${JSONObject.quote(json)})", null) }
         }
         updater.prepareLaunch()
@@ -152,7 +153,21 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStart() { super.onStart(); phone.reconnectIfNeeded() }
-    override fun onDestroy() { phone.disconnect(); super.onDestroy() }
+    override fun onResume() {
+        super.onResume()
+        // came back from "Display over other apps" settings: start floating lyrics if it's now allowed
+        if (core.prefs.getBoolean("float_pending", false) && LyricsOverlayService.canDraw(this)) {
+            core.prefs.edit().putBoolean("float_pending", false).putBoolean("floating", true).apply()
+            LyricsOverlayService.start(this)
+            web.evaluateJavascript("window.__lumenNative && window.__lumenNative.floatingChanged && window.__lumenNative.floatingChanged(true)", null)
+        }
+    }
+    override fun onDestroy() {
+        core.webPush = null
+        // keep the Spotify connection while floating lyrics need it
+        if (!LyricsOverlayService.running) phone.disconnect()
+        super.onDestroy()
+    }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
@@ -198,6 +213,7 @@ class MainActivity : ComponentActivity() {
             .put("deviceName", phone.deviceName)
             .put("volume", phone.volume())
             .put("appRemote", true)
+            .put("floating", LyricsOverlayService.running)
             .toString()
 
         @JavascriptInterface fun openAuth(url: String) {
@@ -218,6 +234,22 @@ class MainActivity : ComponentActivity() {
             runOnUiThread { phone.command(cmd, arg) { err -> reply(id, if (err == null) JSONObject().put("ok", true) else JSONObject().put("error", err)) } }
         }
         @JavascriptInterface fun setVolume(v: Double) { runOnUiThread { phone.setVolume(v) } }
+
+        // ---- floating lyrics ----
+        @JavascriptInterface fun setLyrics(uri: String, json: String) { core.setLyrics(uri, json) }
+        @JavascriptInterface fun setFloatingLyrics(id: Int, on: Boolean) {
+            runOnUiThread {
+                if (on && !LyricsOverlayService.canDraw(this@MainActivity)) {
+                    core.prefs.edit().putBoolean("float_pending", true).apply()
+                    startActivity(Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                    reply(id, JSONObject().put("needsPermission", true))
+                    return@runOnUiThread
+                }
+                core.prefs.edit().putBoolean("floating", on).apply()
+                if (on) LyricsOverlayService.start(this@MainActivity) else LyricsOverlayService.stop(this@MainActivity)
+                reply(id, JSONObject().put("on", on))
+            }
+        }
 
         @JavascriptInterface fun markHealthy() { io.execute { updater.markHealthy() } }
 

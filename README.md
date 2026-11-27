@@ -37,6 +37,10 @@ In Customize → Playback (or the Devices panel) you can switch to controlling y
 **Smooth mode:** on phones and tablets Lumen automatically uses lighter effects (Customize → General → Effects: Auto).
 In testing on a phone-speed CPU it ran at 60 fps instead of 13 with full effects. Pick **Full** if your device handles it.
 
+**Floating lyrics:** Aa on the lyrics → *Float lyrics over other apps*. The current line floats over any app while music
+plays; drag it anywhere, tap it to open Lumen. Android asks once to allow "Display over other apps".
+**Widget:** long-press your home screen → Widgets → Lumen. **Quick Settings tile:** edit your Quick Settings and drag in Lumen.
+
 On phones, tap the 💬 button in Now Playing for full-screen lyrics. The back button closes panels, then goes back.
 
 **Updates:** Lumen inside the app updates itself over the air from this repo (same fingerprint checks and automatic
@@ -85,6 +89,20 @@ playing, recently played songs, your top artists, what's on repeat, your saved a
 - **Lyrics styles:** Word by word (each word lights up and lifts as it's sung), Line sweep, Minimal and One line,
   with size, glow, letter spacing and line spacing controls.
 
+## Lyrics extras
+Tap the **Aa** button on the lyrics: **translate** them (pick the language in Customize → Lyrics), or show the
+**pronunciation** for Japanese, Korean and Chinese songs. Korean and Chinese work offline; Japanese uses Google when
+available. Lyrics and translations are saved on your device, so songs you've played before load instantly, even offline.
+
+## More
+- **Sleep timer:** the 🌙 in the Queue panel (15 min to 1½ hours, or the end of the song).
+- **Song info & credits:** ••• on any song → who wrote, produced and played on it (MusicBrainz), plus Genius and Spotify links.
+- **Artist bios** from Wikipedia on artist pages.
+- **Your listening:** minutes today and this week, your streak, and your top artists and songs, at the bottom of Home.
+  It's counted on your own device and never leaves it.
+- **Floating mini player** (PC, Chrome/Edge): the small window icon next to "Playing on…" keeps the song and lyric line on top of other apps.
+- **Keyboard shortcuts:** press `?`.
+
 ## Command palette — Ctrl+K (⌘K on Mac)
 Type to do almost anything: change a setting ("aurora"), apply a theme ("theme sunset"), jump to a page, control
 playback, or search Spotify and play or open the result.
@@ -126,7 +144,8 @@ Ctrl/Cmd+, = customize · click a lyric line to jump to it · scroll the lyrics 
   loads more with "Show more songs".
 
 ## Credits
-Bundled open-source libraries (MIT, see `public/vendor/LICENSES.txt`): node-vibrant (album palettes) and CodeMirror 5
-(CSS editor). Ideas borrowed from great open-source projects (no code copied): Apple Music-like Lyrics (AMLL) and Beautiful Lyrics
+Bundled open-source libraries (MIT, see `public/vendor/LICENSES.txt`): node-vibrant (album palettes), CodeMirror 5
+(CSS editor), hangul-romanization and pinyin-pro (pronunciation). Android: Spotify App Remote SDK (Apache 2.0).
+Data from LRCLIB (lyrics), Wikipedia (bios), MusicBrainz (credits); translation via Google Translate and MyMemory. Ideas borrowed from great open-source projects (no code copied): Apple Music-like Lyrics (AMLL) and Beautiful Lyrics
 for word-by-word lyrics, whatamesh for mesh gradients, and cmdk / ninja-keys for the command palette.
 Lyrics: [LRCLIB](https://lrclib.net).

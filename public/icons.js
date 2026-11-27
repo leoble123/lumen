@@ -41,6 +41,12 @@ export const icons = {
   lyrics: s('<path d="M4.5 5.5h15a1.5 1.5 0 0 1 1.5 1.5v8.5a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5V17h-1A1.5 1.5 0 0 1 3 15.5V7a1.5 1.5 0 0 1 1.5-1.5z"/><path d="M7.5 10h9M7.5 13h6"/>'),
   up: s('<path d="M12 19V5M6 11l6-6 6 6"/>'),
   down: s('<path d="M12 5v14M6 13l6 6 6-6"/>'),
+  moon: s('<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/>'),
+  popout: s('<rect x="3.5" y="5" width="17" height="14" rx="2.5"/><rect x="11.5" y="11.5" width="7" height="5.5" rx="1.2" fill="currentColor" stroke="none"/>'),
+  translate: s('<path d="M4 6h9M8.5 4v2M6 6c.6 2.8 2.6 5 5.5 6.3M11 6c-.7 3.2-3 5.8-6.5 7"/><path d="M12.5 20l4-9 4 9M14 17h5"/>'),
+  info: s('<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.1"/>'),
+  check: s('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+  keyboard: s('<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h1M10 10h1M13.5 10h1M17 10h.5M7 14h10"/>'),
   person: s('<circle cx="12" cy="8.5" r="3.8"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/>'),
 };
 

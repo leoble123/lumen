@@ -64,30 +64,70 @@ export function withGaps(lines, durationMs, showGaps = true) {
   return out;
 }
 
-export async function getLyrics({ id, name, artist, album, durationMs }) {
+// Song names often carry extras that lyric sites don't use: "- Remastered 2011", "(feat. X)", "- Radio Edit"…
+export function cleanTitle(name) {
+  return String(name || '')
+    .replace(/\s*[([](feat\.?|ft\.?|with)\s[^)\]]*[)\]]/gi, '')
+    .replace(/\s+-\s+(\d{4}\s+)?(remaster(ed)?|radio edit|single version|album version|mono|stereo|bonus track|original mix|edit)(\s+\d{4})?.*$/i, '')
+    .replace(/\s*[([](\d{4}\s+)?remaster(ed)?(\s+\d{4})?[)\]]/gi, '')
+    .trim();
+}
+const norm = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+/g, '');
+
+async function fetchJson(url) {
+  const r = await fetch(url);
+  return r.ok ? r.json() : null;
+}
+
+function toResult(hit) {
+  if (!hit) return null;
+  if (hit.instrumental) return { type: 'instrumental' };
+  if (hit.syncedLyrics) return { type: 'synced', lines: parseLRC(hit.syncedLyrics) };
+  if (hit.plainLyrics) return { type: 'plain', lines: hit.plainLyrics.split('\n').map(text => ({ time: -1, text })) };
+  return null;
+}
+
+async function lookup({ name, artist, album, durationMs }) {
+  const dur = Math.round(durationMs / 1000);
+  const clean = cleanTitle(name);
+  const tries = [
+    { track_name: name, artist_name: artist, album_name: album, duration: dur },
+    clean !== name && { track_name: clean, artist_name: artist, album_name: album, duration: dur },
+    { track_name: clean, artist_name: artist, duration: dur },
+  ].filter(Boolean);
+  let plain = null;
+  for (const q of tries) {
+    const hit = await fetchJson(`https://lrclib.net/api/get?${new URLSearchParams(q)}`).catch(() => null);
+    const r = toResult(hit);
+    if (r?.type === 'synced' || r?.type === 'instrumental') return r;
+    plain ||= r;
+  }
+  // Search, then pick the closest match: same artist, similar length, synced lyrics preferred
+  const list = await fetchJson(`https://lrclib.net/api/search?${new URLSearchParams({ track_name: clean, artist_name: artist })}`).catch(() => null) || [];
+  const a = norm(artist), t = norm(clean);
+  const scored = list.map(x => {
+    let sc = 0;
+    if (norm(x.artistName).includes(a) || a.includes(norm(x.artistName))) sc += 4;
+    if (norm(x.trackName) === t) sc += 3; else if (norm(cleanTitle(x.trackName)) === t) sc += 2;
+    const dd = Math.abs((x.duration || 0) - dur);
+    sc += dd <= 2 ? 3 : dd <= 5 ? 2 : dd <= 10 ? 1 : -2;
+    if (x.syncedLyrics) sc += 2;
+    return { x, sc };
+  }).filter(o => o.sc >= 5).sort((p, q) => q.sc - p.sc);
+  return toResult(scored[0]?.x) || plain || { type: 'none' };
+}
+
+// Lyrics are saved on this device, so songs you've played before show lyrics instantly (and offline)
+export async function getLyrics(track) {
+  const { id } = track;
   if (cache.has(id)) return cache.get(id);
   const p = (async () => {
-    const q = new URLSearchParams({ track_name: name, artist_name: artist, album_name: album, duration: Math.round(durationMs / 1000) });
-    let hit = null;
-    try {
-      const r = await fetch(`https://lrclib.net/api/get?${q}`);
-      if (r.ok) hit = await r.json();
-    } catch {}
-    if (!hit?.syncedLyrics) {
-      try {
-        const r = await fetch(`https://lrclib.net/api/search?${new URLSearchParams({ track_name: name, artist_name: artist })}`);
-        if (r.ok) {
-          const list = await r.json();
-          hit = list.filter(x => x.syncedLyrics)
-            .sort((a, b) => Math.abs(a.duration * 1000 - durationMs) - Math.abs(b.duration * 1000 - durationMs))[0]
-            || list.find(x => x.plainLyrics) || hit;
-        }
-      } catch {}
-    }
-    if (hit?.instrumental) return { type: 'instrumental' };
-    if (hit?.syncedLyrics) return { type: 'synced', lines: parseLRC(hit.syncedLyrics) };
-    if (hit?.plainLyrics) return { type: 'plain', lines: hit.plainLyrics.split('\n').map(text => ({ time: -1, text })) };
-    return { type: 'none' };
+    const kv = await import('./kv.js');
+    const saved = await kv.get('lyr:' + id).catch(() => null);
+    if (saved && (saved.res.type !== 'none' || Date.now() - saved.at < 3 * 864e5)) return saved.res;   // retry "not found" after 3 days
+    const res = await lookup(track);
+    kv.set('lyr:' + id, { at: Date.now(), res }).catch(() => {});
+    return res;
   })();
   cache.set(id, p);
   p.catch(() => cache.delete(id));

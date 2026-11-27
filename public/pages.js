@@ -1,6 +1,7 @@
 // Detail pages (playlist / album / artist / liked songs), track lists, menus, queue and playlist editing.
 import { api } from './api.js';
 import { icons } from './icons.js';
+import * as info from './info.js';
 
 let ctx;                 // { toast, play, showView, getState, getSource, refreshLibrary, needReconnect }
 const $ = s => document.querySelector(s);
@@ -160,6 +161,7 @@ async function trackMenu(anchor, t, i, cfg) {
     { label: 'Add to playlist…', icon: 'listAdd', action: () => playlistPicker([t.uri]) },
     liked != null && { label: liked ? 'Remove from Liked Songs' : 'Save to Liked Songs', icon: liked ? 'heart' : 'heartLine', action: () => toggleLike(t.uri, !liked, cfg, i) },
     '-',
+    t.type === 'track' && ctx.songInfo && { label: 'Song info & credits', icon: 'info', action: () => ctx.songInfo(t) },
     t.album?.id && !cfg.hideAlbumLink && { label: 'Go to album', icon: 'album', action: () => openPage('album', t.album.id) },
     t.artists[0]?.id && { label: `Go to ${t.artists[0].name}`, icon: 'person', action: () => openPage('artist', t.artists[0].id) },
     cfg.reorder && i > 0 && { label: 'Move up', icon: 'up', action: () => cfg.reorder(i, i - 1) },
@@ -519,6 +521,14 @@ async function artistPage(my) {
   $('#detail-body').innerHTML = `<div class="section-title">Popular</div><div id="artist-top"></div>
     ${albums?.items?.length ? `<div class="section-title">Albums</div><div class="row-scroll">${albumTiles(albums)}</div>` : ''}
     ${singles?.items?.length ? `<div class="section-title">Singles & EPs</div><div class="row-scroll">${albumTiles(singles)}</div>` : ''}`;
+  // A short bio from Wikipedia, when we can be sure it's the right artist
+  info.artistAbout(a.name).then(v => {
+    if (!v || page !== my) return;
+    $('#artist-top').insertAdjacentHTML('afterend', `<div class="section-title">About</div>${info.aboutHtml(v)}`);
+    const box = document.querySelector('#detail-body .about');
+    window.__lumenGlass?.attach(box);
+    box.querySelector('.about-text').onclick = () => box.classList.toggle('open');
+  });
   renderList($('#artist-top'), { kind: 'artist', tracks: top, showAlbum: true, emptyText: 'No songs found.',
     playAt: i => ctx.play({ uris: [...top.slice(i), ...top.slice(0, i)].map(t => t.uri) }) });
 }

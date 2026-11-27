@@ -3,8 +3,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
+        android:name=".LumenApp"
         android:label="Lumen"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
@@ -31,6 +35,24 @@
                 <data android:scheme="lumen" android:host="callback" />
             </intent-filter>
         </activity>
+
+        <!-- Floating lyrics over other apps -->
+        <service android:name=".LyricsOverlayService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="Shows the current song's lyrics floating over other apps, as the user asked" />
+        </service>
+
+        <!-- Home screen widget -->
+        <receiver android:name=".LumenWidget" android:exported="false" android:label="Lumen">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_info" />
+        </receiver>
+
+        <!-- Quick Settings tile -->
+        <service android:name=".PlayTileService" android:exported="true" android:label="Lumen" android:icon="@drawable/ic_stat_lumen"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE" /></intent-filter>
+            <meta-data android:name="android.service.quicksettings.ACTIVE_TILE" android:value="true" />
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

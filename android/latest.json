@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0",
-  "apk": "android/releases/lumen-1.1.0.apk",
-  "sha256": "f3fd714479e4c139f9c4709cf4b54bab491428157ca373e34f68a5aa34592cf4",
-  "notes": "Plays music on your phone through the Spotify app, with live updates."
+  "versionCode": 3,
+  "versionName": "1.2.0",
+  "apk": "android/releases/lumen-1.2.0.apk",
+  "sha256": "4a88f9df6ab5c1d7c6ef7696e89b372aaaaca3eff087658a5c10b30f503c814d",
+  "notes": "Floating lyrics over other apps, a home screen widget and a Quick Settings tile."
 }
