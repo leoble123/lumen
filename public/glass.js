@@ -67,7 +67,7 @@ function build(el) {
   if (!w || !h || mode !== 'liquid' || !refractionSupported) { el.style.backdropFilter = ''; return; }
   const r = Math.round(radiusOf(el, w, h));
   const bezel = Math.round(Math.min(Math.max(r * 0.9 * thickness, 8), Math.min(w, h) / 2, 40 * thickness));
-  const scale = (el.dataset.glassStrength ? Number(el.dataset.glassStrength) : 1) * strength * Math.min(70, 22 + bezel * 1.1);
+  const scale = (el.dataset.glassStrength ? Number(el.dataset.glassStrength) : 1) * strength * Math.min(56, 16 + bezel * 0.9);
   const key = `${w}|${h}|${r}|${bezel}|${scale.toFixed(1)}|${fringe}`;
   if (entry.key === key && entry.filter.isConnected) return applyStyle(el, entry);
   entry.key = key;
@@ -92,8 +92,8 @@ function build(el) {
 }
 
 function applyStyle(el, entry) {
-  const blur = el.dataset.glassBlur ?? 3;
-  el.style.backdropFilter = `url(#${entry.id}) blur(${blur}px) saturate(1.7) brightness(1.04)`;
+  const blur = el.dataset.glassBlur ?? 8;
+  el.style.backdropFilter = `url(#${entry.id}) blur(${blur}px) saturate(1.8) brightness(1.04)`;
 }
 
 let pending = new Set(), raf = 0;

@@ -20,6 +20,9 @@ import * as sleep from './sleep.js';
 import * as stats from './stats.js';
 import * as pip from './pip.js';
 import * as info from './info.js';
+import * as newmusic from './newmusic.js';
+import * as gestures from './gestures.js';
+const { haptic } = gestures;
 import { extraLines, canRomanize, LANGS, defaultLang } from './lyrics-extra.js';
 if (ANDROID) document.body.classList.add('android');
 import { missingScopes } from './auth.js';
@@ -57,10 +60,10 @@ const SCHEMA = [
   ]},
   { group: 'Glass', items: [
     { key: 'glass', type: 'seg', label: 'Style', def: 'liquid', options: [['liquid', 'Liquid'], ['frosted', 'Frosted'], ['tinted', 'Tinted']] },
-    { key: 'refraction', type: 'range', label: 'Refraction', def: 60, min: 0, max: 100, step: 1, unit: '%', showIf: s => s.glass === 'liquid' },
-    { key: 'glassThickness', type: 'range', label: 'Thickness', def: 1, min: 0.5, max: 2, step: 0.1, unit: '×', showIf: s => s.glass === 'liquid' },
-    { key: 'glassFringe', type: 'range', label: 'Color fringe', def: 40, min: 0, max: 100, step: 1, unit: '%', showIf: s => s.glass === 'liquid' },
-    { key: 'glassShine', type: 'range', label: 'Edge shine', def: 60, min: 0, max: 100, step: 1, unit: '%' },
+    { key: 'refraction', type: 'range', label: 'Refraction', def: 35, min: 0, max: 100, step: 1, unit: '%', showIf: s => s.glass === 'liquid' },
+    { key: 'glassThickness', type: 'range', label: 'Thickness', def: 0.7, min: 0.5, max: 2, step: 0.1, unit: '×', showIf: s => s.glass === 'liquid' },
+    { key: 'glassFringe', type: 'range', label: 'Color fringe', def: 0, min: 0, max: 100, step: 1, unit: '%', showIf: s => s.glass === 'liquid' },
+    { key: 'glassShine', type: 'range', label: 'Edge shine', def: 35, min: 0, max: 100, step: 1, unit: '%' },
     { key: 'glassTintAmount', type: 'range', label: 'Tint', def: 0, min: 0, max: 60, step: 1, unit: '%' },
     { key: 'glassTint', type: 'color', label: 'Tint color', def: '#7a5cff', showIf: s => s.glassTintAmount > 0 },
     { key: 'roundness', type: 'range', label: 'Corner roundness', def: 1, min: 0.2, max: 1.6, step: 0.1, unit: '×' },
@@ -116,8 +119,15 @@ function validate(item, v) {
   }
   return item.def;
 }
+// v2 (1.1): calmer glass defaults. People who never touched those sliders get the new look.
+const OLD_DEFAULTS = { 2: { refraction: 60, glassThickness: 1, glassFringe: 40, glassShine: 60 } };
 function loadSettings() {
   const saved = store.get('settings2') || {};
+  const ver = store.get('settingsVersion') || 1;
+  if (ver < 2) {
+    for (const [k, old] of Object.entries(OLD_DEFAULTS[2])) if (saved[k] === old) delete saved[k];
+    store.set('settingsVersion', 2);
+  }
   return Object.fromEntries(ITEMS.map(i => [i.key, validate(i, saved[i.key] ?? i.def)]));
 }
 const settings = loadSettings();
@@ -254,7 +264,8 @@ function buildControl(item) {
     update = () => {
       let active;
       seg.querySelectorAll('button').forEach(b => { const on = b.dataset.v === settings[item.key]; b.classList.toggle('active', on); if (on) active = b; });
-      if (active && active.offsetWidth) { thumb.style.left = active.offsetLeft + 'px'; thumb.style.width = active.offsetWidth + 'px'; }
+      // measure after all controls are updated (reading layout mid-update makes the browser redo it every time)
+      if (active) thumbQueue.push([thumb, active]);
     };
   } else if (item.type === 'range') {
     row.innerHTML = `<div class="set-label">${item.label}<span class="val"></span></div><input type="range" min="${item.min}" max="${item.max}" step="${item.step}">`;
@@ -285,8 +296,18 @@ function buildControl(item) {
   return row;
 }
 
+const thumbQueue = [];
+let lastThemeKey = '';
+function placeSegThumbs() {
+  const sizes = thumbQueue.map(([, b]) => [b.offsetLeft, b.offsetWidth]);   // read everything first…
+  thumbQueue.forEach(([t], i) => { if (sizes[i][1]) { t.style.left = sizes[i][0] + 'px'; t.style.width = sizes[i][1] + 'px'; } });   // …then write
+  thumbQueue.length = 0;
+}
 function syncSettingsUI() {
-  if ($('#themes-box') && $('#settings').classList.contains('open')) themes.renderInto($('#themes-box'));
+  const open = $('#settings').classList.contains('open');
+  const themeKey = JSON.stringify(settings) + (store.get('themes') || []).length;
+  if ($('#themes-box') && open && themeKey !== lastThemeKey) { lastThemeKey = themeKey; themes.renderInto($('#themes-box')); }
+  thumbQueue.length = 0;
   controls.forEach(({ row, update, item }) => {
     row.classList.toggle('collapsed', !!item.showIf && !item.showIf(settings));
     update();
@@ -296,6 +317,7 @@ function syncSettingsUI() {
   $('#set-connect').hidden = loggedIn;
   $('#set-install').hidden = !installPrompt || isStandalone();
   $('#set-version').textContent = runningVersion ? (readyVersion ? `${runningVersion} → ${readyVersion} (restart)` : runningVersion) : 'dev';
+  placeSegThumbs();
 }
 const setFill = input => input.style.setProperty('--fill', `${((input.value - input.min) / (input.max - input.min)) * 100}%`);
 
@@ -705,18 +727,28 @@ function tickLyrics(pos) {
    RENDER LOOP
    ===================================================================== */
 let lastShownSec = -1;
+// Runs every frame, so it only touches what's on screen, and only with cheap transforms (no layout)
+const barFill = $('#bar-fill'), miniBar = $('#mini-bar'), miniEl = $('#mini');
+let lastPct = -1;
 function frame(now) {
-  const dt = Math.min(100, now - lastFrame); lastFrame = now;
-  animateBg(dt);
-  const pos = position(), dur = state.track?.durationMs || 0;
-  const pct = dur ? pos / dur : 0;
-  $('#bar-fill').style.width = `${pct * 100}%`;
-  $('#mini-bar').style.transform = `scaleX(${pct})`;
-  const sec = Math.floor(pos / 1000);
-  if (sec !== lastShownSec) { lastShownSec = sec; $('#t-cur').textContent = fmt(pos); $('#t-left').textContent = '-' + fmt(dur - pos); }
-  tickLyrics(pos);
-  if (pip.isOpen()) pip.update(state, currentLine());
   requestAnimationFrame(frame);
+  const dt = Math.min(100, now - lastFrame); lastFrame = now;
+  if (document.hidden) return;
+  animateBg(dt);
+  if (!state.track) return;
+  const pos = position(), dur = state.track.durationMs || 0;
+  const pct = dur ? Math.min(1, pos / dur) : 0;
+  const npVisible = currentView === 'nowplaying';
+  if (Math.abs(pct - lastPct) > 0.0005) {
+    lastPct = pct;
+    if (npVisible) barFill.style.transform = `scaleX(${pct.toFixed(4)})`;
+    if (miniEl.classList.contains('show')) miniBar.style.transform = `scaleX(${pct.toFixed(4)})`;
+  }
+  const sec = Math.floor(pos / 1000);
+  if (npVisible && sec !== lastShownSec) { lastShownSec = sec; $('#t-cur').textContent = fmt(pos); $('#t-left').textContent = '-' + fmt(dur - pos); }
+  if (npVisible) tickLyrics(pos);
+  else if (synced) { const i = lines.findLastIndex(l => l.time <= pos + 150); if (i !== activeIdx) activeIdx = -2; }   // catch up when we come back
+  if (pip.isOpen()) pip.update(state, currentLine());
 }
 
 /* =====================================================================
@@ -733,9 +765,9 @@ function seekTo(ms) {
 async function run(fn) { try { await fn(); } catch (e) { toast(e.message || String(e)); } }
 const needSource = fn => () => source ? run(fn) : toast('Connect Spotify or try the demo first.');
 
-$('#btn-play').onclick = needSource(() => source.toggle());
+$('#btn-play').onclick = needSource(() => { haptic('tap'); return source.toggle(); });
 $('#mini-play').onclick = e => { e.stopPropagation(); $('#btn-play').click(); };
-$('#btn-next').onclick = needSource(() => source.next());
+$('#btn-next').onclick = needSource(() => { haptic('tap'); return source.next(); });
 $('#mini-next').onclick = e => { e.stopPropagation(); $('#btn-next').click(); };
 $('#btn-prev').onclick = needSource(() => position() > 3000 ? seekTo(0) : source.prev());
 $('#btn-shuffle').onclick = needSource(() => source.shuffle(!state.shuffle));
@@ -753,7 +785,7 @@ $('#btn-pip').onclick = () => pip.open();
 document.addEventListener('click', e => { const b = e.target.closest('[data-href]'); if (b) { e.preventDefault(); openExternal(b.dataset.href); } });
 $('#btn-lyrics').onclick = () => { document.body.classList.toggle('np-lyrics'); $('#btn-lyrics').classList.toggle('on', document.body.classList.contains('np-lyrics')); requestAnimationFrame(layoutLyrics); };
 $('#close-queue').onclick = () => pages.closeQueue();
-$('#btn-like').onclick = () => pages.toggleNowPlayingLike();
+$('#btn-like').onclick = () => { haptic('tap'); pages.toggleNowPlayingLike(); };
 $('#title').onclick = () => state.track?.albumId && state.track.id !== 'demo' && pages.openPage('album', state.track.albumId);
 $('#bar').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seekTo(((e.clientX - r.left) / r.width) * (state.track?.durationMs || 0)); };
 let volTimer;
@@ -786,9 +818,11 @@ function showView(name) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + name));
   moveTabThumb(true);
   updateMini();
+  if (name === 'nowplaying') { lastShownSec = -1; lastPct = -1; }
+  if (name === 'new') newmusic.open();
   if (name === 'library') loadLibrary();
   if (name === 'home') { home.load(); renderStats(); }
-  if (name === 'search') setTimeout(() => $('#search-input').focus(), 80);
+  if (name === 'search') { if (!searchInput.value.trim()) renderRecents(); if (!matchMedia('(hover: none)').matches) setTimeout(() => searchInput.focus(), 80); }
 }
 function moveTabThumb(animate) {
   const b = $('#tabbar button.active'), th = $('#tab-thumb');
@@ -797,7 +831,7 @@ function moveTabThumb(animate) {
   else { th.style.top = ''; th.style.height = ''; th.style.left = b.offsetLeft + 'px'; th.style.width = b.offsetWidth + 'px'; }
   if (animate) { th.classList.add('moving'); setTimeout(() => th.classList.remove('moving'), 220); }
 }
-$$('#tabbar button').forEach(b => b.onclick = () => { pages.resetStack(); showView(b.dataset.view); });
+$$('#tabbar button').forEach(b => b.onclick = () => { if (currentView !== b.dataset.view) haptic('tick'); pages.resetStack(); showView(b.dataset.view); });
 $('#btn-back').onclick = () => pages.back();
 window.addEventListener('mouseup', e => { if (e.button === 3 && currentView === 'detail') { e.preventDefault(); pages.back(); } });
 
@@ -825,7 +859,7 @@ function onTileClick(e) {
   if (t.dataset.kind) pages.openPage(t.dataset.kind, t.dataset.id);
   return true;
 }
-document.addEventListener('click', e => { if (e.target.closest('#view-detail .tile, #view-home .tile')) onTileClick(e); });
+document.addEventListener('click', e => { if (e.target.closest('#view-detail .tile, #view-home .tile, #view-new .tile')) onTileClick(e); });
 
 async function loadLibrary(force) {
   const el = $('#playlists');
@@ -851,47 +885,91 @@ async function loadLibrary(force) {
 $('#playlists').onclick = onTileClick;
 
 /* ---------- Search ----------
-   Spotify (Feb 2026) caps search at 10 results per type, so we page with offset. */
+   Results appear as you type (Spotify caps search at 10 per type, so "more songs" pages with offset).
+   With an empty box you see your recent searches and the things you opened from search. */
 let searchSeq = 0, searchTimer, songOffset = 0, lastQuery = '';
 let searchTracks = [];
+const normQ = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+/g, '');
 function renderSongs() {
   pages.renderList($('#song-list'), { kind: 'search', tracks: searchTracks, showAlbum: true,
-    playAt: i => { const t = searchTracks[i]; return play(t.album?.uri ? { context_uri: t.album.uri, offset: { uri: t.uri } } : { uris: [t.uri] }); } });
+    playAt: i => { const t = searchTracks[i]; rememberSearch({ kind: 'track', uri: t.uri, id: t.id, title: t.name, sub: `Song · ${t.artists.map(a => a.name).join(', ')}`, img: t.image, album: t.album?.uri }); return play(t.album?.uri ? { context_uri: t.album.uri, offset: { uri: t.uri } } : { uris: [t.uri] }); } });
 }
 
-$('#search-input').addEventListener('input', e => {
+// ---- recents ----
+const recentSearch = () => store.get('recentSearch') || { queries: [], items: [] };
+function rememberSearch(item) {
+  const r = recentSearch();
+  if (lastQuery) r.queries = [lastQuery, ...r.queries.filter(q => q.toLowerCase() !== lastQuery.toLowerCase())].slice(0, 8);
+  if (item) r.items = [item, ...r.items.filter(x => x.uri !== item.uri)].slice(0, 12);
+  store.set('recentSearch', r);
+}
+function renderRecents() {
+  const out = $('#search-results'), r = recentSearch();
+  out.classList.remove('searching');
+  if (!r.queries.length && !r.items.length) { out.innerHTML = '<p class="empty search-hint">Search for songs, artists, albums and playlists.</p>'; return; }
+  out.innerHTML = (r.queries.length ? `<div class="section-head"><div class="section-title">Recent searches</div><button class="text-link" data-clear>Clear</button></div>
+      <div class="q-chips">${r.queries.map(q => `<button class="q-chip" data-q="${esc(q)}">${icons.search}<span>${esc(q)}</span></button>`).join('')}</div>` : '') +
+    (r.items.length ? `<div class="section-head"><div class="section-title">Recently opened</div>${r.queries.length ? '' : '<button class="text-link" data-clear>Clear</button>'}</div>
+      <div class="recent-list">${r.items.map((x, i) => `<div class="recent-row" data-ri="${i}">
+        <img src="${esc(x.img || '')}" class="${x.kind === 'artist' ? 'round' : ''}" alt="" loading="lazy">
+        <div><div class="t">${esc(x.title)}</div><div class="s">${esc(x.sub || '')}</div></div>
+        <button class="ctl small" data-rm="${i}" aria-label="Remove">${icons.close}</button></div>`).join('')}</div>` : '');
+}
+
+const searchInput = $('#search-input');
+searchInput.addEventListener('input', e => {
   clearTimeout(searchTimer);
   const q = e.target.value.trim();
-  if (!q) { searchSeq++; $('#search-results').innerHTML = ''; return; }
-  searchTimer = setTimeout(() => runSearch(q), 280);
+  if (!q) { searchSeq++; lastQuery = ''; renderRecents(); return; }
+  searchTimer = setTimeout(() => runSearch(q), 150);
 });
-$('#search-input').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); const q = e.target.value.trim(); if (q) runSearch(q); } });
+searchInput.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim(); if (q) runSearch(q);
+  searchInput.blur();   // hides the phone keyboard so you can see the results
+});
+
+const topResultHtml = o => `<div class="top-result glass" data-kind="${o.kind}" data-id="${esc(o.id)}" data-uri="${esc(o.uri)}" data-album="${esc(o.album || '')}">
+  <img src="${esc(o.img || '')}" class="${o.kind === 'artist' ? 'round' : ''}" alt="">
+  <div class="tr-text"><div class="tr-name">${esc(o.title)}</div><div class="tr-sub">${esc(o.sub)}</div></div>
+  <button class="tile-play glass tr-play" aria-label="Play">${icons.play}</button></div>`;
 
 async function runSearch(q) {
   const out = $('#search-results');
   if (!isLoggedIn()) { out.innerHTML = '<p class="empty">Connect Spotify to search. (Customize → Connect Spotify)</p>'; return; }
   const seq = ++searchSeq;
   lastQuery = q; songOffset = 0;
-  out.innerHTML = '<div class="section-title">Songs</div><div class="songs">' + Array(6).fill('<div class="skeleton"></div>').join('') + '</div>';
+  // keep the previous results on screen (dimmed) instead of flashing to a loading state
+  if (out.querySelector('#song-list, .top-result')) out.classList.add('searching');
+  else out.innerHTML = '<div class="section-title">Songs</div><div class="songs">' + Array(6).fill('<div class="skeleton"></div>').join('') + '</div>';
   try {
     const r = await api('/search', { query: { q, type: 'track,album,artist,playlist', limit: 10 } });
     if (seq !== searchSeq) return;
+    out.classList.remove('searching');
     const tracks = r.tracks?.items?.filter(Boolean) || [];
     const albums = r.albums?.items?.filter(Boolean) || [];
     const artists = r.artists?.items?.filter(Boolean) || [];
     const playlists = r.playlists?.items?.filter(Boolean) || [];
     if (!tracks.length && !albums.length && !artists.length && !playlists.length) { out.innerHTML = `<p class="empty">No results for “${esc(q)}”.</p>`; return; }
-    let html = '';
     searchTracks = tracks.map(t => pages.normTrack(t)).filter(Boolean);
-    if (tracks.length) html += `<div class="section-title">Songs</div><div class="songs" id="song-list"></div>` +
-      (r.tracks.next ? '<button class="pill-btn more-btn" id="more-songs">Show more songs</button>' : '');
+    // Top result: the artist if the name matches what you typed, otherwise the best song
+    const nq = normQ(q), a0 = artists[0], t0 = searchTracks[0];
+    const artistWins = a0 && (normQ(a0.name).startsWith(nq) || nq.startsWith(normQ(a0.name)) || !t0);
+    const top = artistWins
+      ? { kind: 'artist', id: a0.id, uri: a0.uri, title: a0.name, sub: 'Artist', img: pages.pickImage(a0.images) }
+      : t0 && { kind: 'track', id: t0.id, uri: t0.uri, title: t0.name, sub: `Song · ${t0.artists.map(a => a.name).join(', ')}`, img: t0.album?.image ? pages.pickImage(tracks[0].album?.images) : t0.image, album: t0.album?.uri };
+    let html = `<div class="search-top">${top ? `<div><div class="section-title">Top result</div>${topResultHtml(top)}</div>` : ''}
+      ${tracks.length ? `<div class="search-songs"><div class="section-title">Songs</div><div class="songs" id="song-list"></div>${r.tracks.next ? '<button class="pill-btn more-btn" id="more-songs">Show more songs</button>' : ''}</div>` : ''}</div>`;
     if (artists.length) html += `<div class="section-title">Artists</div><div class="row-scroll">${artists.map(a => tile({ uri: a.uri, kind: 'artist', id: a.id, img: pages.pickImage(a.images), title: a.name, sub: 'Artist' }, 'round')).join('')}</div>`;
     if (albums.length) html += `<div class="section-title">Albums</div><div class="row-scroll">${albums.map(a => tile({ uri: a.uri, kind: 'album', id: a.id, img: pages.pickImage(a.images), title: a.name, sub: a.artists?.map(x => x.name).join(', ') })).join('')}</div>`;
     if (playlists.length) html += `<div class="section-title">Playlists</div><div class="row-scroll">${playlists.map(p => tile({ uri: p.uri, kind: 'playlist', id: p.id, img: pages.pickImage(p.images), title: p.name, sub: p.owner?.display_name })).join('')}</div>`;
     out.innerHTML = html;
     if (searchTracks.length) renderSongs();
+    out.querySelectorAll('.top-result.glass').forEach(el => glass.attach(el));
   } catch (e) {
     if (seq !== searchSeq) return;
+    out.classList.remove('searching');
     out.innerHTML = `<p class="empty">Search failed: ${esc(e.message)}</p>`;
   }
 }
@@ -909,6 +987,27 @@ $('#search-results').addEventListener('click', async e => {
     } catch (err) { btn.textContent = 'Show more songs'; toast(err.message); }
     return;
   }
+  const qc = e.target.closest('[data-q]');
+  if (qc) { searchInput.value = qc.dataset.q; runSearch(qc.dataset.q); return; }
+  if (e.target.closest('[data-clear]')) { store.set('recentSearch', { queries: [], items: [] }); renderRecents(); return; }
+  const rm = e.target.closest('[data-rm]');
+  if (rm) { const r = recentSearch(); r.items.splice(Number(rm.dataset.rm), 1); store.set('recentSearch', r); renderRecents(); return; }
+  const rr = e.target.closest('.recent-row');
+  if (rr) {
+    const x = recentSearch().items[Number(rr.dataset.ri)];
+    if (x.kind === 'track') return playItem(x.album ? { context_uri: x.album, offset: { uri: x.uri } } : { uris: [x.uri] });
+    return pages.openPage(x.kind, x.id);
+  }
+  const top = e.target.closest('.top-result');
+  if (top) {
+    const o = { kind: top.dataset.kind, id: top.dataset.id, uri: top.dataset.uri, title: top.querySelector('.tr-name').textContent, sub: top.querySelector('.tr-sub').textContent, img: top.querySelector('img').src, album: top.dataset.album };
+    rememberSearch(o);
+    if (o.kind === 'track') return playItem(o.album ? { context_uri: o.album, offset: { uri: o.uri } } : { uris: [o.uri] });
+    if (e.target.closest('.tr-play')) return playItem({ context_uri: o.uri });
+    return pages.openPage('artist', o.id);
+  }
+  const t = e.target.closest('.tile');
+  if (t && lastQuery) rememberSearch({ kind: t.dataset.kind, id: t.dataset.id, uri: t.dataset.uri, title: t.querySelector('.t')?.textContent, sub: t.querySelector('.s')?.textContent || '', img: t.querySelector('img')?.src });
   onTileClick(e);
 });
 
@@ -1117,7 +1216,7 @@ async function switchMode(mode, { resume = false } = {}) {
 function paletteCommands() {
   const go = (v, label, icon) => ({ group: 'Go to', title: label, icon, run: () => { pages.resetStack(); showView(v); } });
   const cmds = [
-    go('home', 'Home', 'home'), go('nowplaying', 'Now Playing', 'note'), go('library', 'Library', 'library'), go('search', 'Search', 'search'),
+    go('home', 'Home', 'home'), go('new', 'New Music', 'sparkle'), go('nowplaying', 'Now Playing', 'note'), go('library', 'Library', 'library'), go('search', 'Search', 'search'),
     { group: 'Playback', title: state.paused ? 'Play' : 'Pause', icon: state.paused ? 'play' : 'pause', hint: 'Space', run: () => $('#btn-play').click() },
     { group: 'Playback', title: 'Next song', icon: 'next', hint: 'Shift →', run: () => $('#btn-next').click() },
     { group: 'Playback', title: 'Previous song', icon: 'prev', hint: 'Shift ←', run: () => $('#btn-prev').click() },
@@ -1208,6 +1307,8 @@ async function boot() {
   themes.setup({ settings, ITEMS, validate, applyAll, toast, store });
   media.setup({ disabled: ANDROID, getState: () => state, position, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click(), seek: ms => seekTo(ms) });
   $('#open-palette').onclick = () => palette.openPalette();
+  gestures.setup({ next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click(), openNowPlaying: () => showView('nowplaying') });
+  newmusic.setup({ isLoggedIn, onBadge: n => { $('#tabbar [data-view=new] .tab-dot').hidden = !n; } });
   sleep.setup({ getState: () => state, toast, openMenu: pages.openMenu, pause: () => source && !state.paused && run(() => source.toggle()),
     onChange: () => { $('#sleep-chip').hidden = !sleep.active(); $('#sleep-chip b').textContent = sleep.label(); $('#btn-sleep').classList.toggle('on', sleep.active()); } });
   pip.setup({ getState: () => state, currentLine, toast, toggle: () => $('#btn-play').click(), next: () => $('#btn-next').click(), prev: () => $('#btn-prev').click() });
@@ -1245,8 +1346,10 @@ async function boot() {
   if (isLoggedIn()) { startSource(settings.playbackMode); if (missingScopes().length) needReconnect(); showView(settings.startView); }
   else showWelcome(true);
   setupUpdates().catch(() => {});
+  // quietly check for new releases a little after start-up (for the dot on the New tab)
+  if (isLoggedIn()) setTimeout(() => newmusic.refresh().catch(() => {}), 12000);
 }
 boot();
 
 // For automated tests
-window.__lumen = { ANDROID, sleep, stats, pip, info, songInfo, get lyricsLines() { return lines; }, pages, devices, home, palette, themes, bgGl, applyAll, wallpaper, particles, cssedit, get artPalettes() { return artPalettes; }, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };
+window.__lumen = { ANDROID, newmusic, sleep, stats, pip, info, songInfo, get lyricsLines() { return lines; }, pages, devices, home, palette, themes, bgGl, applyAll, wallpaper, particles, cssedit, get artPalettes() { return artPalettes; }, settings, setSetting, resetSettings, checkUpdates, get readyVersion() { return readyVersion; }, get runningVersion() { return runningVersion; }, get state() { return state; }, get source() { return source; } };

@@ -37,6 +37,9 @@ In Customize → Playback (or the Devices panel) you can switch to controlling y
 **Smooth mode:** on phones and tablets Lumen automatically uses lighter effects (Customize → General → Effects: Auto).
 In testing on a phone-speed CPU it ran at 60 fps instead of 13 with full effects. Pick **Full** if your device handles it.
 
+**Gestures:** swipe the album art left/right to skip; swipe the mini player up to open Now Playing, or sideways to skip;
+pull a panel down by its header to close it. Taps have light haptic feedback.
+
 **Floating lyrics:** Aa on the lyrics → *Float lyrics over other apps*. The current line floats over any app while music
 plays; drag it anywhere, tap it to open Lumen. Android asks once to allow "Display over other apps".
 **Widget:** long-press your home screen → Widgets → Lumen. **Quick Settings tile:** edit your Quick Settings and drag in Lumen.
@@ -66,6 +69,15 @@ github.com/leoble123/lumen for a new version, downloads it in the background, an
 node tools/release.js 0.4.1 "What's new in this version"
 git commit -am "Lumen 0.4.1" && git push
 ```
+
+## New Music
+The **New** tab (✦) shows fresh releases from the artists you follow and the ones you play most: *Out now*,
+*Earlier this month* and *Recently*, filterable by albums or singles. **Coming soon** lists announced albums from
+MusicBrainz (Spotify doesn't share upcoming releases). A dot on the tab means something new came out.
+
+## Search
+Results appear as you type, with a **Top result** (the artist when the name matches, otherwise the best song).
+With an empty box you see your **recent searches** and the things you recently opened from search.
 
 ## Home
 Lumen opens on **Home** (change it in Customize → General): your quick picks, the albums and playlists you were just

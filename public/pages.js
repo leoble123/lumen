@@ -132,6 +132,7 @@ const menuEl = document.createElement('div');
 menuEl.id = 'menu'; menuEl.className = 'glass';
 let menuItems = [];
 export function openMenu(anchor, items) {
+  try { window.LumenAndroid?.haptic ? window.LumenAndroid.haptic('long') : (matchMedia('(hover: none)').matches && navigator.vibrate?.(8)); } catch {}
   menuItems = items.filter(Boolean);
   menuEl.innerHTML = menuItems.map((it, i) => it === '-' ? '<div class="menu-sep"></div>'
     : `<button data-mi="${i}" class="${it.danger ? 'danger' : ''}"><span>${esc(it.label)}</span>${icons[it.icon] || ''}</button>`).join('');

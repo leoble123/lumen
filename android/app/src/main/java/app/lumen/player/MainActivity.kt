@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.os.Message
+import android.view.HapticFeedbackConstants
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -88,7 +89,10 @@ class MainActivity : ComponentActivity() {
             setSupportMultipleWindows(true)
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             userAgentString = "$userAgentString LumenAndroid/${BuildConfig.VERSION_NAME}"
+            offscreenPreRaster = true          // pre-draws content just off-screen: smoother scrolling and page changes
         }
+        web.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+        web.isHapticFeedbackEnabled = true
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 loader.shouldInterceptRequest(request.url)
@@ -234,6 +238,17 @@ class MainActivity : ComponentActivity() {
             runOnUiThread { phone.command(cmd, arg) { err -> reply(id, if (err == null) JSONObject().put("ok", true) else JSONObject().put("error", err)) } }
         }
         @JavascriptInterface fun setVolume(v: Double) { runOnUiThread { phone.setVolume(v) } }
+
+        // light taps from the phone's own haptic engine (respects the system "touch feedback" setting)
+        @JavascriptInterface fun haptic(kind: String) {
+            val c = when (kind) {
+                "tick" -> HapticFeedbackConstants.CLOCK_TICK
+                "long" -> HapticFeedbackConstants.LONG_PRESS
+                "heavy" -> HapticFeedbackConstants.CONFIRM
+                else -> HapticFeedbackConstants.CONTEXT_CLICK
+            }
+            runOnUiThread { web.performHapticFeedback(c) }
+        }
 
         // ---- floating lyrics ----
         @JavascriptInterface fun setLyrics(uri: String, json: String) { core.setLyrics(uri, json) }

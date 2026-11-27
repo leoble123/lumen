@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2.0",
-  "apk": "android/releases/lumen-1.2.0.apk",
-  "sha256": "4a88f9df6ab5c1d7c6ef7696e89b372aaaaca3eff087658a5c10b30f503c814d",
-  "notes": "Floating lyrics over other apps, a home screen widget and a Quick Settings tile."
+  "versionCode": 4,
+  "versionName": "1.3.0",
+  "apk": "android/releases/lumen-1.3.0.apk",
+  "sha256": "3bcc4700f12601d1b66b5724122c6deb0ce11dd852c4491e74ac6a1b4b036434",
+  "notes": "Smoother scrolling and page changes, and haptic feedback."
 }

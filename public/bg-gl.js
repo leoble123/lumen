@@ -120,10 +120,14 @@ function init() {
   return true;
 }
 
+// Window size is read only when it changes (reading it every frame forces the browser to redo layout)
+let vw = innerWidth, vh = innerHeight;
+addEventListener('resize', () => { vw = innerWidth; vh = innerHeight; });
 function resize() {
-  const w = Math.max(1, Math.round(innerWidth * scale)), h = Math.max(1, Math.round(innerHeight * scale));
+  const w = Math.max(1, Math.round(vw * scale)), h = Math.max(1, Math.round(vh * scale));
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
 }
+
 
 function draw(now) {
   raf = 0;
