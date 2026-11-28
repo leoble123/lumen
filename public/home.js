@@ -17,11 +17,11 @@ function greeting() {
 }
 
 const tile = (o, round) => `<div class="tile${round ? ' round' : ''}" data-kind="${o.kind}" data-id="${esc(o.id)}" data-uri="${esc(o.uri)}">
-  <div class="cover">${o.img ? `<img src="${esc(o.img)}" loading="lazy" alt="">` : `<div class="hero-ph">${icons.note}</div>`}<button class="tile-play glass" aria-label="Play">${icons.play}</button></div>
+  <div class="cover">${o.img ? `<img src="${esc(o.img)}" loading="lazy" alt="">` : `<div class="hero-ph">${icons.note}</div>`}<button class="tile-play" aria-label="Play">${icons.play}</button></div>
   <div class="t">${esc(o.title)}</div>${o.sub ? `<div class="s">${esc(o.sub)}</div>` : ''}</div>`;
 const quick = o => `<div class="tile qp" data-kind="${o.kind}" data-id="${esc(o.id)}" data-uri="${esc(o.uri)}">
   ${o.img ? `<img src="${esc(o.img)}" alt="">` : `<span class="qp-ph">${icons.heart}</span>`}<span class="qp-t">${esc(o.title)}</span>
-  <button class="tile-play glass" aria-label="Play">${icons.play}</button></div>`;
+  <button class="tile-play" aria-label="Play">${icons.play}</button></div>`;
 const section = (title, body, id = '') => body ? `<section class="home-sec"${id ? ` id="${id}"` : ''}><div class="section-title">${title}</div>${body}</section>` : '';
 
 const LIKED_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#5b3cff"/><stop offset="1" stop-color="#ff5fa2"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/><path transform="translate(26 26) scale(2)" fill="#fff" d="M12 20.3s-7.8-4.6-7.8-10.4A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 7.8 2.7c0 5.8-7.8 10.4-7.8 10.4z"/></svg>');

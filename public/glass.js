@@ -8,7 +8,7 @@ export const refractionSupported = (() => {
   return /Chrom|Edge|Brave|Opera/i.test(brands) || (/Chrome\//.test(navigator.userAgent) && !/Firefox/.test(navigator.userAgent));
 })();
 
-let svg, mode = 'liquid', strength = 0.6, nextId = 0, thickness = 1, fringe = 0.025;
+let svg, mode = 'liquid', strength = 0.6, nextId = 0, thickness = 1, fringe = 0.025, only = null, blurPx = 8;
 const els = new Map();          // element -> { id, filter, key }
 const mapCache = new Map();     // "w x h x r x bezel" -> data URL
 
@@ -64,7 +64,7 @@ function radiusOf(el, w, h) {
 function build(el) {
   const entry = els.get(el);
   const w = Math.round(el.offsetWidth), h = Math.round(el.offsetHeight);
-  if (!w || !h || mode !== 'liquid' || !refractionSupported) { el.style.backdropFilter = ''; return; }
+  if (!w || !h || mode !== 'liquid' || !refractionSupported || (only && !el.matches(only))) { el.style.backdropFilter = ''; return; }
   const r = Math.round(radiusOf(el, w, h));
   const bezel = Math.round(Math.min(Math.max(r * 0.9 * thickness, 8), Math.min(w, h) / 2, 40 * thickness));
   const scale = (el.dataset.glassStrength ? Number(el.dataset.glassStrength) : 1) * strength * Math.min(56, 16 + bezel * 0.9);
@@ -78,6 +78,12 @@ function build(el) {
   f.setAttribute('primitiveUnits', 'userSpaceOnUse');
   f.setAttribute('color-interpolation-filters', 'sRGB');
   const ab = fringe; // chromatic aberration amount
+  // No colour fringe → one displacement pass instead of three (about 3x cheaper to draw)
+  if (ab < 0.004) {
+    f.innerHTML = `<feImage href="${map}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/>
+      <feDisplacementMap in="SourceGraphic" in2="map" scale="${scale}" xChannelSelector="R" yChannelSelector="G"/>`;
+    return applyStyle(el, entry);
+  }
   f.innerHTML = `
     <feImage href="${map}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="map"/>
     <feDisplacementMap in="SourceGraphic" in2="map" scale="${scale * (1 + ab)}" xChannelSelector="R" yChannelSelector="G" result="dr"/>
@@ -92,7 +98,7 @@ function build(el) {
 }
 
 function applyStyle(el, entry) {
-  const blur = el.dataset.glassBlur ?? 8;
+  const blur = el.dataset.glassBlur ?? blurPx;
   el.style.backdropFilter = `url(#${entry.id}) blur(${blur}px) saturate(1.8) brightness(1.04)`;
 }
 
@@ -121,6 +127,8 @@ export function configure(newMode, newStrength, opts = {}) {
   mode = newMode; strength = newStrength;
   if (opts.thickness != null) thickness = opts.thickness;
   if (opts.fringe != null) fringe = opts.fringe;
+  only = opts.only || null;
+  blurPx = opts.blur ?? 8;
   document.documentElement.dataset.glass = mode === 'liquid' && !refractionSupported ? 'frosted' : mode;
   els.forEach((_, el) => { els.get(el).key = ''; schedule(el); });
 }

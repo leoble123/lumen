@@ -2,6 +2,8 @@
 import { api } from './api.js';
 import { icons } from './icons.js';
 import * as info from './info.js';
+import * as stats from './stats.js';
+import * as upcoming from './upcoming.js';
 
 let ctx;                 // { toast, play, showView, getState, getSource, refreshLibrary, needReconnect }
 const $ = s => document.querySelector(s);
@@ -163,6 +165,7 @@ async function trackMenu(anchor, t, i, cfg) {
     liked != null && { label: liked ? 'Remove from Liked Songs' : 'Save to Liked Songs', icon: liked ? 'heart' : 'heartLine', action: () => toggleLike(t.uri, !liked, cfg, i) },
     '-',
     t.type === 'track' && ctx.songInfo && { label: 'Song info & credits', icon: 'info', action: () => ctx.songInfo(t) },
+    t.type === 'track' && { label: 'Open in Spotify', icon: 'external', action: () => openInSpotify(t.uri) },
     t.album?.id && !cfg.hideAlbumLink && { label: 'Go to album', icon: 'album', action: () => openPage('album', t.album.id) },
     t.artists[0]?.id && { label: `Go to ${t.artists[0].name}`, icon: 'person', action: () => openPage('artist', t.artists[0].id) },
     cfg.reorder && i > 0 && { label: 'Move up', icon: 'up', action: () => cfg.reorder(i, i - 1) },
@@ -387,12 +390,13 @@ function hero({ image, round, label, title, sub, desc, actions }) {
       <div class="hero-actions">${actions}</div>
     </div></div>`;
 }
-const actionBtns = ({ like, edit, follow } = {}) => `
+const actionBtns = ({ like, edit, follow, download } = {}) => `
   <button class="primary pill" data-act="play">${icons.play}<span>Play</span></button>
   <button class="glass pill" data-act="shuffle">${icons.shuffle}<span>Shuffle</span></button>
   ${like != null ? `<button class="glass circle-btn hero-like${like ? ' on' : ''}" data-act="like" aria-label="Save">${like ? icons.heart : icons.heartLine}</button>` : ''}
   ${follow != null ? `<button class="glass pill" data-act="follow">${follow ? 'Following' : 'Follow'}</button>` : ''}
-  ${edit ? `<button class="glass circle-btn" data-act="edit" aria-label="Edit playlist">${icons.pencil}</button>` : ''}`;
+  ${edit ? `<button class="glass circle-btn" data-act="edit" aria-label="Edit playlist">${icons.pencil}</button>` : ''}
+  ${download ? `<button class="glass circle-btn" data-act="download" aria-label="Download" title="Download (in the Spotify app)">${icons.download}</button>` : ''}`;
 
 function wireHero(handlers) {
   const head = $('#detail-head');
@@ -416,9 +420,10 @@ async function albumPage(my) {
   const artists = (a.artists || []).map(x => `<span class="link" data-artist="${esc(x.id)}">${esc(x.name)}</span>`).join(', ');
   const render = () => {
     $('#detail-head').innerHTML = hero({ image: pickImage(a.images), label: `${a.album_type === 'single' ? 'Single' : 'Album'}${year ? ' · ' + year : ''}`, title: a.name,
-      sub: `${artists} · ${tracks.length} songs · ${totalTime(tracks)}`, actions: actionBtns({ like: liked }) });
+      sub: `${artists} · ${tracks.length} songs · ${totalTime(tracks)}`, actions: actionBtns({ like: liked, download: true }) });
     wireHero({
       play: () => playThenShuffle({ context_uri: a.uri }, false),
+      download: () => download(a.uri),
       shuffle: () => playThenShuffle({ context_uri: a.uri }, true),
       like: async b => { const on = !b.classList.contains('on'); await librarySave(a.uri, on); b.classList.toggle('on', on); b.innerHTML = on ? icons.heart : icons.heartLine; ctx.toast(on ? 'Album saved to your library' : 'Album removed from your library'); },
     });
@@ -443,9 +448,10 @@ async function playlistPage(my) {
     if (page !== my) return;
     const songs = p.items ? `${tracks.length} songs · ${totalTime(tracks)}` : '';
     $('#detail-head').innerHTML = hero({ image: pickImage(p.images), label: `Playlist${p.public === false ? ' · Private' : ''}`, title: p.name, desc,
-      sub: `By ${esc(p.owner?.display_name || 'Spotify')}${songs ? ' · ' + songs : ''}`, actions: actionBtns({ edit: owned, follow: owned ? null : following }) });
+      sub: `By ${esc(p.owner?.display_name || 'Spotify')}${songs ? ' · ' + songs : ''}`, actions: actionBtns({ edit: owned, follow: owned ? null : following, download: true }) });
     wireHero({
       play: () => playThenShuffle({ context_uri: p.uri }, false),
+      download: () => download(p.uri),
       shuffle: () => playThenShuffle({ context_uri: p.uri }, true),
       edit: () => editPlaylist(p),
       follow: async () => { following = !following; await librarySave(p.uri, following); ctx.toast(following ? 'Added to your library' : 'Removed from your library'); ctx.refreshLibrary(); render(); },
@@ -497,41 +503,184 @@ async function editPlaylist(p) {
   openPage('playlist', p.id, { replace: true });
 }
 
+// Spotify removed artist top-tracks, popularity and followers (Feb 2026), and caps lists at 10 per request,
+// so the artist page is built from several sources: paged search, the full paged discography,
+// your own listening (Spotify top tracks + plays counted on this device), and MusicBrainz announcements.
+const byArtist = (t, id) => t?.artists?.some(x => (x.id || idOf(x.uri)) === id);
+const baseTitle = s => String(s || '').toLowerCase().replace(/\s*[-–(\[].*?(remaster|live|version|edit|mix|mono|stereo|deluxe|acoustic|sped|slowed).*$/i, '').replace(/[^\p{L}\p{N}]+/gu, '');
+async function popularSongs(a) {
+  const q = `artist:"${a.name.replace(/"/g, '')}"`;
+  const pages = await Promise.allSettled([0, 10, 20, 30].map(offset => api('/search', { query: { q, type: 'track', limit: 10, offset } })));
+  let items = pages.flatMap(p => p.value?.tracks?.items || []).filter(Boolean);
+  if (items.filter(t => byArtist(t, a.id)).length < 5) {   // the field filter can come back empty; plain search instead
+    const plain = await Promise.allSettled([0, 10].map(offset => api('/search', { query: { q: a.name, type: 'track', limit: 10, offset } })));
+    items = items.concat(plain.flatMap(p => p.value?.tracks?.items || []).filter(Boolean));
+  }
+  const seen = new Set(), out = [];
+  for (const t of items) {
+    if (!byArtist(t, a.id)) continue;
+    const k = baseTitle(t.name);
+    if (seen.has(k) || seen.has(t.uri)) continue;
+    seen.add(k); seen.add(t.uri);
+    out.push(normTrack(t));
+  }
+  return out.filter(Boolean);
+}
+async function albumsOf(id, group, maxPages) {
+  const out = [];
+  for (let offset = 0, n = 0; n < maxPages; n++, offset += 10) {
+    let r;
+    try { r = await api(`/artists/${id}/albums`, { query: { include_groups: group, limit: 10, offset } }); }
+    catch (e) { if (n === 0 && group !== 'album,single') throw e; break; }
+    out.push(...(r?.items || []).filter(Boolean));
+    if (!r?.next || !(r.items || []).length) break;
+  }
+  return out;
+}
+async function discography(id) {
+  let [albums, singles, appears] = await Promise.all([
+    albumsOf(id, 'album', 5).catch(() => null), albumsOf(id, 'single', 5).catch(() => null), albumsOf(id, 'appears_on', 2).catch(() => []),
+  ]);
+  const own = new Set([...(albums || []), ...(singles || [])].map(x => x.id));
+  appears = appears.filter(x => !own.has(x.id));
+  if (albums && singles) return { albums, singles, appears };
+  // some accounts reject the per-group filter: get everything and sort it out by type
+  const all = await albumsOf(id, 'album,single', 8).catch(() => []);
+  return { albums: all.filter(x => x.album_type === 'album'), singles: all.filter(x => x.album_type !== 'album'), appears };
+}
+async function yourSongs(a) {
+  const [local, top] = await Promise.all([
+    stats.forArtist(a.id, a.name).catch(() => ({ ms: 0, tracks: [] })),
+    Promise.allSettled(['short_term', 'long_term'].map(r => api('/me/top/tracks', { query: { time_range: r, limit: 50 } }))),
+  ]);
+  const out = new Map();
+  for (const t of local.tracks.slice(0, 10)) out.set(t.uri, { uri: t.uri, id: idOf(t.uri), name: t.n, type: 'track', artists: [{ id: t.aid || a.id, name: t.a || a.name }],
+    album: t.album ? { id: idOf(t.album), uri: t.album, name: '', image: t.img } : null, image: t.img, durationMs: 0 });
+  for (const p of top) for (const t of p.value?.items || []) if (byArtist(t, a.id) && !out.has(t.uri)) out.set(t.uri, normTrack(t));
+  return { ms: local.ms, tracks: [...out.values()].filter(Boolean).slice(0, 10) };
+}
+async function topRank(id) {
+  for (const [range, label] of [['short_term', 'this month'], ['medium_term', 'lately'], ['long_term', 'of all time']]) {
+    try { const r = await api('/me/top/artists', { query: { time_range: range, limit: 50 } }); const i = (r.items || []).findIndex(x => x?.id === id); if (i >= 0) return `Your #${i + 1} artist ${label}`; } catch {}
+  }
+  return '';
+}
+const albumDate = x => x.release_date || '';
+const fmtListen = ms => { const m = Math.round(ms / 60000); return m >= 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`; };
+
 async function artistPage(my) {
   const a = await api(`/artists/${my.id}`);
   if (page !== my) return;
-  // "Top tracks" was removed from Spotify's API (Feb 2026), so popular songs come from search
-  const [search, albums, singles] = await Promise.all([
-    api('/search', { query: { q: `artist:"${a.name}"`, type: 'track', limit: 10 } }).catch(() => null),
-    api(`/artists/${my.id}/albums`, { query: { include_groups: 'album', limit: 10 } }).catch(() => null),
-    api(`/artists/${my.id}/albums`, { query: { include_groups: 'single', limit: 10 } }).catch(() => null),
-  ]);
-  if (page !== my) return;
-  let top = (search?.tracks?.items || []).filter(Boolean);
-  const byArtist = top.filter(t => t.artists?.some(x => x.id === a.id));
-  top = (byArtist.length >= 3 ? byArtist : top).map(t => normTrack(t));
   $('#detail-head').innerHTML = hero({ image: pickImage(a.images), round: true, label: 'Artist', title: a.name,
-    sub: (a.genres || []).slice(0, 3).map(esc).join(' · '), actions: actionBtns() });
+    sub: (a.genres || []).slice(0, 3).map(esc).join(' · '), actions: actionBtns() + `<button class="glass circle-btn" data-act="spotify" aria-label="Open in Spotify">${icons.external}</button>` });
   wireHero({
     play: () => playThenShuffle({ context_uri: a.uri }, false),
     shuffle: () => playThenShuffle({ context_uri: a.uri }, true),
+    spotify: () => openInSpotify(a.uri),
   });
-  const albumTiles = list => (list?.items || []).filter(Boolean).map(x => `<div class="tile" data-kind="album" data-id="${esc(x.id)}" data-uri="${esc(x.uri)}">
-      <div class="cover"><img src="${esc(pickImage(x.images))}" loading="lazy" alt=""><button class="tile-play glass" aria-label="Play">${icons.play}</button></div>
-      <div class="t">${esc(x.name)}</div><div class="s">${esc((x.release_date || '').slice(0, 4))}</div></div>`).join('');
-  $('#detail-body').innerHTML = `<div class="section-title">Popular</div><div id="artist-top"></div>
-    ${albums?.items?.length ? `<div class="section-title">Albums</div><div class="row-scroll">${albumTiles(albums)}</div>` : ''}
-    ${singles?.items?.length ? `<div class="section-title">Singles & EPs</div><div class="row-scroll">${albumTiles(singles)}</div>` : ''}`;
+  $('#detail-body').innerHTML = `<div id="ar-soon"></div><div class="section-title">Popular</div><div id="artist-top">${Array(5).fill('<div class="skeleton" style="height:58px;margin-bottom:4px"></div>').join('')}</div><div id="ar-rest"></div>`;
+
+  const [songs, disco, mine, rank] = await Promise.all([popularSongs(a).catch(() => []), discography(a.id), yourSongs(a), topRank(a.id)]);
+  if (page !== my) return;
+  const subBits = [rank, mine.ms >= 60000 ? `${fmtListen(mine.ms)} listened here` : '', ...(a.genres || []).slice(0, 2)].filter(Boolean);
+  const sub = document.querySelector('#detail-head .hero-sub'); if (sub) sub.textContent = subBits.join(' · ');
+
+  // Popular: 5 at first, "Show more" for the rest (like Spotify)
+  let top = songs.length >= 3 ? songs : [...songs, ...mine.tracks.filter(t => !songs.some(s => s.uri === t.uri))];
+  if (top.length < 3) {   // search found nothing: use the songs from their newest releases
+    const recent = [...disco.albums, ...disco.singles].filter(x => (x.release_date || '') <= new Date().toISOString().slice(0, 10))
+      .sort((p, q) => (q.release_date || '').localeCompare(p.release_date || '')).slice(0, 2);
+    for (const al of await Promise.all(recent.map(x => api(`/albums/${x.id}`).catch(() => null)))) {
+      if (!al) continue;
+      const info = { id: al.id, uri: al.uri, name: al.name, image: pickImage(al.images, true) };
+      for (const t of al.tracks?.items || []) { const n = normTrack(t, info); if (n && !top.some(x => x.uri === n.uri)) top.push(n); }
+    }
+    if (page !== my) return;
+  }
+  const topEl = $('#artist-top');
+  let expanded = false;
+  const drawTop = () => {
+    renderList(topEl, { kind: 'artist', tracks: expanded ? top.slice(0, 20) : top.slice(0, 5), showAlbum: true, emptyText: 'No songs found.',
+      playAt: i => ctx.play({ uris: [...top.slice(i), ...top.slice(0, i)].slice(0, 50).map(t => t.uri) }) });
+    if (top.length > 5) topEl.insertAdjacentHTML('beforeend', `<button class="text-link show-more">${expanded ? 'Show less' : 'Show more'}</button>`);
+    const b = topEl.querySelector('.show-more'); if (b) b.onclick = e => { e.stopPropagation(); expanded = !expanded; drawTop(); };
+  };
+  drawTop();
+
+  const tile = x => `<div class="tile" data-kind="album" data-id="${esc(x.id)}" data-uri="${esc(x.uri)}">
+      <div class="cover"><img src="${esc(pickImage(x.images))}" loading="lazy" alt=""><button class="tile-play" aria-label="Play">${icons.play}</button></div>
+      <div class="t">${esc(x.name)}</div><div class="s">${esc(albumDate(x).slice(0, 4))}${x.album_type && x.album_type !== 'album' ? ' · ' + (x.album_type === 'single' ? 'Single' : esc(x.album_type)) : ''}</div></div>`;
+  const today = new Date().toISOString().slice(0, 10);
+  const released = l => l.filter(x => albumDate(x) <= today).sort((p, q) => albumDate(q).localeCompare(albumDate(p)));
+  const albums = released(disco.albums), singles = released(disco.singles);
+  const latest = [...albums, ...singles].sort((p, q) => albumDate(q).localeCompare(albumDate(p)))[0];
+  // collaborators: who shows up on their songs and releases
+  const collab = new Map();
+  for (const t of [...top, ...mine.tracks]) for (const x of t.artists) if (x.id && x.id !== a.id) collab.set(x.id, { ...x, n: (collab.get(x.id)?.n || 0) + 1 });
+  for (const al of disco.appears) for (const x of al.artists || []) if (x.id && x.id !== a.id && !/various/i.test(x.name)) collab.set(x.id, { id: x.id, name: x.name, n: (collab.get(x.id)?.n || 0) + 1 });
+  const collabs = [...collab.values()].sort((p, q) => q.n - p.n).slice(0, 12);
+
+  $('#ar-rest').innerHTML = `
+    ${latest ? `<div class="section-title">Latest release</div>
+      <div class="latest glass" data-kind="album" data-id="${esc(latest.id)}" data-uri="${esc(latest.uri)}">
+        <img src="${esc(pickImage(latest.images))}" alt=""><div class="latest-info"><div class="latest-k">${latest.album_type === 'single' ? 'Single' : latest.album_type === 'compilation' ? 'Compilation' : 'Album'} · ${esc(new Date(albumDate(latest).length === 10 ? albumDate(latest) + 'T12:00' : albumDate(latest)).toLocaleDateString(undefined, albumDate(latest).length === 10 ? { month: 'short', day: 'numeric', year: 'numeric' } : { year: 'numeric' }))}</div>
+        <div class="latest-t">${esc(latest.name)}</div><div class="latest-s">${latest.total_tracks ? `${latest.total_tracks} song${latest.total_tracks === 1 ? '' : 's'}` : ''}</div></div>
+        <button class="primary circle-btn latest-play" aria-label="Play">${icons.play}</button></div>` : ''}
+    ${mine.tracks.length ? `<div class="section-title">Your top songs</div><div id="artist-mine"></div>` : ''}
+    ${albums.length ? `<div class="section-title">Albums <span class="count">${albums.length}</span></div><div class="row-scroll">${albums.map(tile).join('')}</div>` : ''}
+    ${singles.length ? `<div class="section-title">Singles &amp; EPs <span class="count">${singles.length}</span></div><div class="row-scroll">${singles.map(tile).join('')}</div>` : ''}
+    ${disco.appears.length ? `<div class="section-title">Appears on</div><div class="row-scroll">${disco.appears.map(tile).join('')}</div>` : ''}
+    ${collabs.length ? `<div class="section-title">Works with</div><div class="collab">${collabs.map(c => `<button class="q-chip link" data-artist="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>` : ''}
+    <div id="ar-about"></div>`;
+  const lt = $('#ar-rest .latest');
+  if (lt) {
+    window.__lumenGlass?.attach(lt);
+    lt.onclick = e => { if (e.target.closest('.latest-play')) run(() => ctx.play({ context_uri: latest.uri })); else openPage('album', latest.id); };
+  }
+  if (mine.tracks.length) renderList($('#artist-mine'), { kind: 'artist', tracks: mine.tracks, showAlbum: true,
+    playAt: i => ctx.play({ uris: [...mine.tracks.slice(i), ...mine.tracks.slice(0, i)].map(t => t.uri) }) });
+
+  // Announced: future-dated releases on Spotify (pre-saves) + MusicBrainz
+  const soonSpotify = [...disco.albums, ...disco.singles].filter(x => albumDate(x) > today)
+    .map(x => ({ id: x.id, uri: x.uri, name: x.name, type: x.album_type, date: albumDate(x), artist: { id: a.id, name: a.name }, img: pickImage(x.images) }));
+  const showSoon = list => {
+    if (page !== my || !list.length) return;
+    $('#ar-soon').innerHTML = list.slice(0, 2).map(u => `<div class="soon-hero glass"${u.uri ? ` data-album="${esc(u.id)}"` : ''}>
+      <div class="soon-art">${u.img ? `<img src="${esc(u.img)}" alt="" onerror="this.remove()">` : ''}<span>${esc(a.name.slice(0, 1))}</span></div>
+      <div class="soon-info"><div class="latest-k">Announced ${esc(u.type || 'release')}</div><div class="latest-t">${esc(u.name)}</div>${upcoming.countdownHtml(u.date, true)}</div></div>`).join('');
+    $('#ar-soon').querySelectorAll('.soon-hero').forEach(el => { window.__lumenGlass?.attach(el); if (el.dataset.album) el.onclick = () => openPage('album', el.dataset.album); });
+  };
+  showSoon(soonSpotify);
+  upcoming.forArtists([{ id: a.id, name: a.name }]).then(mb => showSoon(upcoming.dedupe([...soonSpotify, ...mb]))).catch(() => {});
+
   // A short bio from Wikipedia, when we can be sure it's the right artist
   info.artistAbout(a.name).then(v => {
     if (!v || page !== my) return;
-    $('#artist-top').insertAdjacentHTML('afterend', `<div class="section-title">About</div>${info.aboutHtml(v)}`);
-    const box = document.querySelector('#detail-body .about');
+    $('#ar-about').innerHTML = `<div class="section-title">About</div>${info.aboutHtml(v)}`;
+    const box = document.querySelector('#ar-about .about');
     window.__lumenGlass?.attach(box);
     box.querySelector('.about-text').onclick = () => box.classList.toggle('open');
   });
-  renderList($('#artist-top'), { kind: 'artist', tracks: top, showAlbum: true, emptyText: 'No songs found.',
-    playAt: i => ctx.play({ uris: [...top.slice(i), ...top.slice(0, i)].map(t => t.uri) }) });
+}
+
+/** Downloads: Spotify's songs are copy-protected and only its own app may save them for offline,
+ *  so this hands the album/playlist to the Spotify app (with a one-time explanation). */
+export function download(uri) {
+  if (localStorage.getItem('lumen.dlExplained')) return openInSpotify(uri);
+  openModal(`<h3>Download for offline</h3>
+    <p class="modal-text">Spotify's songs are copy-protected, so only the Spotify app is allowed to save them. Lumen opens this in Spotify: tap <b>Download</b> there and it's saved on your device.</p>
+    <div class="modal-actions"><button class="text-btn" data-x>Cancel</button><button class="primary small" data-go>Open in Spotify</button></div>`, m => {
+    m.querySelector('[data-x]').onclick = closeModal;
+    m.querySelector('[data-go]').onclick = () => { localStorage.setItem('lumen.dlExplained', '1'); closeModal(); openInSpotify(uri); };
+  });
+}
+
+/** Opens something in the Spotify app (that's where downloads for offline listening live). */
+export function openInSpotify(uri) {
+  if (window.LumenAndroid?.openExternal) { window.LumenAndroid.openExternal(uri); return; }
+  const [, type, id] = String(uri).split(':');
+  const a = document.createElement('a'); a.href = uri; a.click();   // opens the desktop app if it's installed
+  setTimeout(() => { if (document.hasFocus()) window.open(`https://open.spotify.com/${type}/${id}`, '_blank', 'noopener'); }, 1200);
 }
 
 async function likedPage(my) {
@@ -545,8 +694,8 @@ async function likedPage(my) {
   const render = () => {
     if (page !== my) return;
     $('#detail-head').innerHTML = hero({ image: 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#5b3cff"/><stop offset="1" stop-color="#ff5fa2"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/><path transform="translate(26 26) scale(2)" fill="#fff" d="M12 20.3s-7.8-4.6-7.8-10.4A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 7.8 2.7c0 5.8-7.8 10.4-7.8 10.4z"/></svg>'),
-      label: 'Playlist', title: 'Liked Songs', sub: `${tracks.length} songs`, actions: actionBtns() });
-    wireHero({ play: () => playFrom(0).then(() => ctx.getSource()?.shuffle(false).catch(() => {})), shuffle: () => playFrom(Math.floor(Math.random() * tracks.length)).then(() => ctx.getSource()?.shuffle(true).catch(() => {})) });
+      label: 'Playlist', title: 'Liked Songs', sub: `${tracks.length} songs`, actions: actionBtns({ download: true }) });
+    wireHero({ download: () => download(collection), play: () => playFrom(0).then(() => ctx.getSource()?.shuffle(false).catch(() => {})), shuffle: () => playFrom(Math.floor(Math.random() * tracks.length)).then(() => ctx.getSource()?.shuffle(true).catch(() => {})) });
     renderList($('#detail-body'), { kind: 'liked', tracks, showAlbum: true, emptyText: 'Songs you like will appear here.', playAt: playFrom,
       onRemoveLocal: i => { tracks.splice(i, 1); render(); } });
   };

@@ -64,3 +64,13 @@ export async function summary() {
   return { today, week, streak, total, topArtists, topTracks };
 }
 export async function reset() { data = { days: {}, artists: {}, tracks: {} }; dirty = true; await save(); }
+
+/** What you've played of one artist on this device. */
+export async function forArtist(id, name) {
+  await load(); tick();
+  const a = data.artists[name];
+  const tracks = Object.entries(data.tracks).filter(([, v]) => v.aid === id || v.a === name).sort((x, y) => y[1].ms - x[1].ms).map(([uri, v]) => ({ uri, ...v }));
+  return { ms: a?.ms || 0, tracks };
+}
+/** Minutes listened per artist on this device: { name: { ms, id } } */
+export async function artistTotals() { await load(); return data.artists; }

@@ -198,7 +198,10 @@ function applySettings() {
   r.setProperty('--grain', settings.grain / 100);
   document.body.classList.toggle('align-center', settings.lyricAlign === 'center');
   setBodyFlag('lyric', settings.lyricStyle);
-  glass.configure(smooth ? 'none' : settings.glass, settings.refraction / 100, { thickness: settings.glassThickness, fringe: settings.glassFringe / 100 * 0.06 });
+  // Smooth mode keeps your glass style: Liquid still bends light, but only on the small floating controls
+  // (tab bar, mini player, round buttons), with one cheap pass and no colour fringe. Big panels stay solid.
+  if (smooth) glass.configure(settings.glass, settings.refraction / 100 * 0.85, { thickness: settings.glassThickness, fringe: 0, only: '#tabbar, #mini, .circle-btn.glass', blur: 5 });
+  else glass.configure(settings.glass, settings.refraction / 100, { thickness: settings.glassThickness, fringe: settings.glassFringe / 100 * 0.06 });
   applyColors();
   applyBackground();
   requestAnimationFrame(() => { layoutLyrics(); moveTabThumb(); updateMini(); });
@@ -423,9 +426,13 @@ function applyBackground() {
 const blobs = ['#blob1', '#blob2', '#blob3', '#blob4'].map(s => $(s));
 const BLOB_PATHS = [[0.13, 0.17, -0.18, -0.22, 0], [0.11, 0.09, 0.22, 0.2, 2], [0.07, 0.12, 0.05, -0.05, 4], [0.09, 0.06, -0.2, 0.25, 1]];
 let bgClock = 0, lastFrame = performance.now();
+let blobAcc = 0;
 function animateBg(dt) {
   if (settings.bgStyle !== 'fluid' || smoothMode()) return;   // moving giant blurred blobs is too heavy for phones
   bgClock += dt * settings.bgMotion * 0.001;
+  blobAcc += dt;
+  if (currentView !== 'nowplaying' && blobAcc < 32) return;   // ~30 fps behind the glass pages (looks the same, half the work)
+  blobAcc = 0;
   blobs.forEach((b, i) => {
     const [fx, fy, ox, oy, ph] = BLOB_PATHS[i];
     const x = (ox + Math.sin(bgClock * fx * 2 + ph) * 0.22) * 100;
@@ -812,6 +819,7 @@ let currentView = 'nowplaying';
 let detailFrom = 'library';
 function showView(name) {
   currentView = name;
+  bgGl.setCalm(name !== 'nowplaying');
   document.body.classList.toggle('in-detail', name === 'detail');
   const tab = name === 'detail' ? detailFrom : name;
   $$('#tabbar button').forEach(b => b.classList.toggle('active', b.dataset.view === tab));
@@ -845,7 +853,7 @@ const playItem = body => play(body).catch(e => toast(e.message));
 /* ---------- Library ---------- */
 let libState = 'idle';
 const likedCover = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="g" x2="1" y2="1"><stop stop-color="#5b3cff"/><stop offset="1" stop-color="#ff5fa2"/></linearGradient></defs><rect width="100" height="100" fill="url(#g)"/><path transform="translate(26 26) scale(2)" fill="#fff" d="M12 20.3s-7.8-4.6-7.8-10.4A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 7.8 2.7c0 5.8-7.8 10.4-7.8 10.4z"/></svg>');
-const tile = (o, cls = '') => `<div class="tile ${cls}" data-uri="${esc(o.uri)}" data-kind="${esc(o.kind || '')}" data-id="${esc(o.id || String(o.uri || '').split(':').pop())}"><div class="cover"><img src="${esc(o.img || '')}" loading="lazy" alt="">${o.uri ? `<button class="tile-play glass" aria-label="Play">${icons.play}</button>` : ''}</div><div class="t">${esc(o.title)}</div>${o.sub ? `<div class="s">${esc(o.sub)}</div>` : ''}</div>`;
+const tile = (o, cls = '') => `<div class="tile ${cls}" data-uri="${esc(o.uri)}" data-kind="${esc(o.kind || '')}" data-id="${esc(o.id || String(o.uri || '').split(':').pop())}"><div class="cover"><img src="${esc(o.img || '')}" loading="lazy" alt="">${o.uri ? `<button class="tile-play" aria-label="Play">${icons.play}</button>` : ''}</div><div class="t">${esc(o.title)}</div>${o.sub ? `<div class="s">${esc(o.sub)}</div>` : ''}</div>`;
 const newTile = `<div class="tile new" data-kind="new"><div class="cover">${icons.plus}</div><div class="t">New playlist</div><div class="s">Create your own</div></div>`;
 // Clicking a tile opens its page; the round play button plays it right away
 function onTileClick(e) {
@@ -933,7 +941,7 @@ searchInput.addEventListener('keydown', e => {
 const topResultHtml = o => `<div class="top-result glass" data-kind="${o.kind}" data-id="${esc(o.id)}" data-uri="${esc(o.uri)}" data-album="${esc(o.album || '')}">
   <img src="${esc(o.img || '')}" class="${o.kind === 'artist' ? 'round' : ''}" alt="">
   <div class="tr-text"><div class="tr-name">${esc(o.title)}</div><div class="tr-sub">${esc(o.sub)}</div></div>
-  <button class="tile-play glass tr-play" aria-label="Play">${icons.play}</button></div>`;
+  <button class="tile-play tr-play" aria-label="Play">${icons.play}</button></div>`;
 
 async function runSearch(q) {
   const out = $('#search-results');

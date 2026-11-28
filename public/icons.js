@@ -3,6 +3,8 @@ const s = (body, filled = false) =>
   `<svg viewBox="0 0 24 24" aria-hidden="true" ${filled ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'}>${body}</svg>`;
 
 export const icons = {
+  external: s('<path d="M14 4h6v6M20 4l-9 9M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>'),
+  download: s('<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>'),
   play: s('<path d="M7.2 4.3v15.4c0 .9 1 1.5 1.8 1l12.4-7.7c.7-.5.7-1.5 0-2L9 3.3c-.8-.5-1.8.1-1.8 1z"/>', true),
   pause: s('<rect x="5.5" y="3.5" width="4.6" height="17" rx="1.6"/><rect x="13.9" y="3.5" width="4.6" height="17" rx="1.6"/>', true),
   next: s('<path d="M2.5 6.6v10.8c0 .8.9 1.3 1.6.8L11.5 13v4.4c0 .8.9 1.3 1.6.8l8.3-5.4c.6-.4.6-1.2 0-1.6l-8.3-5.4c-.7-.5-1.6 0-1.6.8V11L4.1 5.8c-.7-.5-1.6 0-1.6.8z"/>', true),

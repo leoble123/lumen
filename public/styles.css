@@ -740,7 +740,7 @@ body.android .overlay { padding-top: var(--safe-top, 0px); }
 /* ================= v0.9: Smooth mode (phones) =================
    Live blur (backdrop-filter), refraction, full-screen grain and blurred/glowing text are what make phones drop frames.
    Smooth mode swaps them for near-opaque glass and keeps every animation on cheap transforms. */
-body.perf-smooth .glass { backdrop-filter: none !important; background: rgba(36, 34, 44, .82); }
+body.perf-smooth .glass:not(#tabbar, #mini, .circle-btn, #menu, #toast) { backdrop-filter: none !important; background: rgba(36, 34, 44, .82); }
 body.perf-smooth .glass::before { display: none; }
 body.perf-smooth .sheet, body.perf-smooth .modal, body.perf-smooth .card, body.perf-smooth .pal-box,
 body.perf-smooth #menu, body.perf-smooth #toast { background: rgba(28, 27, 34, .96); }
@@ -850,9 +850,8 @@ button, .tile, .track, .song, .pick, .pal-item, .device { touch-action: manipula
 img { -webkit-user-drag: none; }
 
 /* Phones (Smooth mode): real frosted glass on the small floating controls, cheap everywhere else */
-body.perf-smooth #tabbar, body.perf-smooth #mini, body.perf-smooth .circle-btn.glass, body.perf-smooth #menu, body.perf-smooth #toast {
-  backdrop-filter: blur(18px) saturate(1.7) !important; background: rgba(32, 30, 40, .5);
-}
+body.perf-smooth #menu, body.perf-smooth #toast { backdrop-filter: blur(18px) saturate(1.7) !important; background: rgba(32, 30, 40, .55); }
+body.perf-smooth :is(#tabbar, #mini, .circle-btn.glass) { backdrop-filter: blur(18px) saturate(1.7); background: rgba(32, 30, 40, .5); }
 body.perf-smooth.appearance-light #tabbar, body.perf-smooth.appearance-light #mini, body.perf-smooth.appearance-light .circle-btn.glass { background: rgba(255,255,255,.62); }
 body.perf-smooth .view { transition: opacity .18s var(--ease), visibility 0s linear .18s; transform: none; }
 body.perf-smooth .view.active { transition: opacity .18s var(--ease), visibility 0s; }
@@ -916,3 +915,116 @@ body.perf-smooth .tile { transition: transform .2s var(--ease); }
   #tabbar button { min-width: 58px; padding: 10px 10px; }
   .nm-grid { grid-template-columns: repeat(2, 1fr); gap: 16px 12px; }
 }
+
+/* ================= v1.2 =================
+   Phones (Smooth mode) now show a real difference between the three glass styles:
+   Liquid = clear glass that bends light at the edges (lens on the small floating controls), bright rim + sheen
+   Frosted = soft milky blur, no lens
+   Tinted = solid, coloured by the album, no blur at all (the cheapest) */
+html[data-glass="liquid"] body.perf-smooth :is(#tabbar, #mini, .circle-btn.glass) { background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.03)); }
+html[data-glass="liquid"] body.perf-smooth :is(#tabbar, #mini, .circle-btn.glass)::before { display: block; opacity: .9; }
+html[data-glass="liquid"] body.perf-smooth :is(#tabbar, #mini, .circle-btn.glass):not([style*="url("]) { backdrop-filter: blur(7px) saturate(2) brightness(1.06); }
+html[data-glass="frosted"] body.perf-smooth :is(#tabbar, #mini, .circle-btn.glass) { backdrop-filter: blur(22px) saturate(1.5) brightness(1.08); background: rgba(120, 118, 132, .30); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.16), 0 8px 24px -10px rgba(0,0,0,.5); }
+html[data-glass="tinted"] body.perf-smooth :is(#tabbar, #mini, .circle-btn.glass, #menu, #toast) { backdrop-filter: none !important; background: color-mix(in srgb, var(--accent, #7c5cff) 26%, rgba(18, 17, 22, .94)); }
+html[data-glass="frosted"] body.perf-smooth :is(.sheet, .modal, .card, .pal-box) { background: rgba(58, 56, 66, .96); }
+html[data-glass="frosted"] body.perf-smooth .glass:not(#tabbar, #mini, .circle-btn, #menu, #toast) { background: rgba(78, 76, 88, .72); }
+html[data-glass="tinted"] body.perf-smooth :is(.sheet, .modal, .card, .pal-box), html[data-glass="tinted"] body.perf-smooth .glass:not(#tabbar, #mini, .circle-btn, #menu, #toast) { background: color-mix(in srgb, var(--accent, #7c5cff) 18%, rgba(20, 19, 24, .96)); }
+body.perf-smooth.appearance-light :is(#tabbar, #mini, .circle-btn.glass) { background: rgba(255,255,255,.6); }
+
+/* Lighter glass on computers: smaller blur radius looks the same through saturation, costs far less */
+[data-glass="frosted"] .glass { backdrop-filter: blur(20px) saturate(1.9) brightness(1.03); }
+[data-glass="tinted"] .glass { backdrop-filter: blur(24px) saturate(1.4) brightness(.72); }
+
+/* Tile play buttons: solid accent circle (was a blurred glass button on every tile = lots of hidden blur work) */
+.tile-play { background: var(--accent, #fff); color: var(--accent-text, #111); box-shadow: 0 6px 18px -6px rgba(0,0,0,.6); border: 0; }
+.tile-play svg { width: 18px; height: 18px; margin-left: 2px; }
+
+/* Countdowns */
+.cd { display: inline-flex; align-items: baseline; gap: 6px; margin-top: 8px; padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,.1); font-size: 12.5px; white-space: nowrap; }
+.cd b { font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.cd i { font-style: normal; color: var(--text-2); }
+.cd.vague { color: var(--text-2); font-weight: 600; }
+.cd.big { font-size: 15px; padding: 8px 14px; margin-top: 12px; background: rgba(255,255,255,.14); }
+.cd.big b { font-size: 19px; }
+
+/* New Music v2 */
+.nm-load { height: 2px; margin: -4px 0 10px; border-radius: 2px; overflow: hidden; background: transparent; transition: background .3s; }
+.nm-load.on { background: rgba(255,255,255,.08); }
+.nm-load i { display: block; height: 100%; background: var(--accent, #fff); transform-origin: left; transform: scaleX(0); transition: transform .5s var(--soft-spring), opacity .4s; opacity: 0; }
+.nm-load.on i { opacity: 1; }
+.nm-hero { display: flex; gap: 22px; align-items: center; padding: 16px; border-radius: calc(26px * var(--round, 1)); max-width: 760px; min-height: 200px; }
+.nm-hero:hover { transform: none; }
+.nm-hero .cover { width: 168px; flex: none; }
+.nm-hero-info { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.nm-why { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; }
+.nm-why svg { width: 14px; height: 14px; color: var(--accent, #fff); }
+.nm-hero-t { font-size: 26px; font-weight: 780; letter-spacing: -.025em; line-height: 1.1; margin-top: 8px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.nm-hero-s { font-size: 14px; color: var(--text-2); margin-top: 6px; }
+.nm-hero .tile-play { position: static; opacity: 1; transform: none; width: auto; height: auto; padding: 10px 20px; margin-top: 16px; display: inline-flex; gap: 8px; border-radius: 999px; font-size: 15px; }
+.nm-hero.skeleton { height: 200px; margin: 30px 0 20px; }
+.nm-picks { margin-top: 18px; }
+.nm-sub { font-size: 17px; margin: 26px 0 8px; color: var(--text-2); }
+.nm-list { display: grid; gap: 2px; max-width: 860px; }
+.nm-row { display: flex; align-items: center; gap: 14px; padding: 8px 10px; border-radius: 14px; transition: background .15s; content-visibility: auto; contain-intrinsic-size: auto 64px; }
+.nm-row:hover { transform: none; background: rgba(255,255,255,.06); }
+.nm-row:active { transform: none; background: rgba(255,255,255,.1); }
+.nm-row img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex: none; background: rgba(255,255,255,.06); }
+.nm-row-i { min-width: 0; flex: 1; }
+.nm-row .t { margin: 0; display: flex; align-items: center; gap: 7px; }
+.nm-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent, #fff); flex: none; }
+.nm-when { font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.nm-row .tile-play { position: static; width: 36px; height: 36px; flex: none; }
+.nm-soon .cover { position: relative; background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.03)); }
+.nm-soon .cover img { position: absolute; inset: 0; }
+.nm-soon .soon-ph { position: absolute; inset: 0; }
+
+/* Artist page */
+.section-title .count { font-size: 15px; font-weight: 600; color: var(--text-2); margin-left: 6px; }
+.show-more { display: block; margin: 8px 0 0 12px; }
+.latest { display: flex; align-items: center; gap: 18px; padding: 14px; border-radius: calc(22px * var(--round, 1)); max-width: 640px; cursor: pointer; transition: transform .3s var(--soft-spring); }
+.latest:active { transform: scale(.985); }
+.latest img { width: 104px; height: 104px; border-radius: 12px; object-fit: cover; flex: none; }
+.latest-info { min-width: 0; flex: 1; }
+.latest-k { font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; color: var(--text-2); }
+.latest-t { font-size: 20px; font-weight: 760; letter-spacing: -.02em; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.latest-s { font-size: 13.5px; color: var(--text-2); margin-top: 2px; }
+.latest-play { flex: none; width: 48px; height: 48px; }
+.soon-hero { display: flex; align-items: center; gap: 18px; padding: 16px; border-radius: calc(24px * var(--round, 1)); max-width: 640px; margin: 22px 0 4px; }
+.soon-hero[data-album] { cursor: pointer; }
+.soon-art { position: relative; width: 96px; height: 96px; border-radius: 12px; overflow: hidden; flex: none; display: grid; place-items: center; background: linear-gradient(135deg, rgba(255,255,255,.14), rgba(255,255,255,.04)); font-size: 40px; font-weight: 800; color: rgba(255,255,255,.35); }
+.soon-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.soon-info { min-width: 0; }
+.collab { display: flex; flex-wrap: wrap; gap: 8px; max-width: 860px; }
+
+@media (max-width: 640px) {
+  .nm-hero { gap: 14px; padding: 12px; min-height: 0; }
+  .nm-hero .cover { width: 120px; }
+  .nm-hero-t { font-size: 20px; }
+  .nm-hero .tile-play { padding: 8px 16px; margin-top: 12px; }
+  .latest img { width: 80px; height: 80px; }
+  .soon-art { width: 80px; height: 80px; }
+}
+
+/* Entrances: new pages settle in (art scales up, text and the first rows rise in a quick cascade).
+   Only opacity + transform, so it's cheap on phones too. */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes artIn { from { opacity: 0; transform: scale(.94); } }
+.hero-art img { animation: artIn .55s var(--soft-spring) both; }
+.hero-info > * { animation: rise .5s var(--soft-spring) both; }
+.hero-info > :nth-child(2) { animation-delay: 35ms; } .hero-info > :nth-child(3) { animation-delay: 70ms; }
+.hero-info > :nth-child(4) { animation-delay: 105ms; } .hero-info > :nth-child(5) { animation-delay: 140ms; }
+#detail-body .track:nth-child(-n+12), .nm-list .nm-row:nth-child(-n+12), .latest, .soon-hero, .nm-hero:not(.skeleton) { animation: rise .45s var(--soft-spring) both; }
+#detail-body .track:nth-child(1), .nm-list .nm-row:nth-child(1) { animation-delay: 62ms; }
+#detail-body .track:nth-child(2), .nm-list .nm-row:nth-child(2) { animation-delay: 84ms; }
+#detail-body .track:nth-child(3), .nm-list .nm-row:nth-child(3) { animation-delay: 106ms; }
+#detail-body .track:nth-child(4), .nm-list .nm-row:nth-child(4) { animation-delay: 128ms; }
+#detail-body .track:nth-child(5), .nm-list .nm-row:nth-child(5) { animation-delay: 150ms; }
+#detail-body .track:nth-child(6), .nm-list .nm-row:nth-child(6) { animation-delay: 172ms; }
+#detail-body .track:nth-child(7), .nm-list .nm-row:nth-child(7) { animation-delay: 194ms; }
+#detail-body .track:nth-child(8), .nm-list .nm-row:nth-child(8) { animation-delay: 216ms; }
+#detail-body .track:nth-child(9), .nm-list .nm-row:nth-child(9) { animation-delay: 238ms; }
+#detail-body .track:nth-child(10), .nm-list .nm-row:nth-child(10) { animation-delay: 260ms; }
+#detail-body .track:nth-child(11), .nm-list .nm-row:nth-child(11) { animation-delay: 282ms; }
+#detail-body .track:nth-child(12), .nm-list .nm-row:nth-child(12) { animation-delay: 304ms; }
+.cd b { transition: opacity .2s; }
+@media (prefers-reduced-motion: reduce) { .hero-art img, .hero-info > *, #detail-body .track, .nm-row, .latest, .soon-hero, .nm-hero { animation: none !important; } }

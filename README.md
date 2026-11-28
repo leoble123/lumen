@@ -71,9 +71,20 @@ git commit -am "Lumen 0.4.1" && git push
 ```
 
 ## New Music
-The **New** tab (✦) shows fresh releases from the artists you follow and the ones you play most: *Out now*,
-*Earlier this month* and *Recently*, filterable by albums or singles. **Coming soon** lists announced albums from
-MusicBrainz (Spotify doesn't share upcoming releases). A dot on the tab means something new came out.
+The **New** tab (✦) is built from what you actually listen to: your Spotify top artists (this month, lately, all time),
+top songs, recently played, plays counted by Lumen, saved albums and follows. **For you** puts the releases from the
+artists you play most first (with the reason), **Coming soon** shows announced albums with a live countdown
+(from MusicBrainz and Spotify pre-saves, since Spotify has no upcoming-release data), and the rest is listed by date.
+A dot on the tab means something new came out.
+
+## Artist pages
+Popular songs (5, then *Show more*), the latest release, your own top songs by them and how long you've listened,
+the full discography (albums, singles & EPs, appears on), who they work with, a countdown for anything announced,
+and a short bio from Wikipedia.
+
+## Downloads
+Spotify's songs are copy-protected, so only the Spotify app may save them for offline. The **↓** button on albums,
+playlists and Liked Songs opens them in Spotify, where you tap Download.
 
 ## Search
 Results appear as you type, with a **Top result** (the artist when the name matches, otherwise the best song).

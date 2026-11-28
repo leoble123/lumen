@@ -89,7 +89,7 @@ const FRAG = {
 export const STYLES = Object.keys(FRAG);
 
 let canvas, gl, buf, programs = {}, current = null, raf = 0, clock = 0, last = 0;
-let speed = 1, amount = 0.5, scale = 0.5, lite = false, lastDraw = 0;
+let speed = 1, amount = 0.5, scale = 0.5, lite = false, lastDraw = 0, calm = false;
 let colors = [[0.3, 0.1, 0.5], [0.8, 0.3, 0.4], [0.9, 0.6, 0.4], [0.1, 0.15, 0.4]], target = colors.map(c => c.slice());
 
 function compile(type, src) {
@@ -133,7 +133,9 @@ function draw(now) {
   raf = 0;
   if (!current || !gl) return;
   // Smooth mode (phones): a quarter-resolution picture redrawn ~24 times a second is plenty for a soft gradient
-  if (lite && now - lastDraw < 41) { raf = requestAnimationFrame(draw); return; }
+  // Away from Now Playing the background sits behind glass panels: ~30 redraws a second looks identical
+  // and halves how often every glass element has to re-blur what's behind it
+  if (now - lastDraw < (lite ? 41 : calm ? 32 : 0)) { raf = requestAnimationFrame(draw); return; }
   lastDraw = now;
   const dt = Math.min(150, now - (last || now)); last = now;
   if (!document.hidden) {
@@ -176,3 +178,4 @@ export function setColors(hexes) {
 }
 export const isRunning = () => !!current;
 export function setLite(on) { lite = !!on; }
+export function setCalm(on) { calm = !!on; }
